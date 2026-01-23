@@ -13,6 +13,8 @@ from ml.explain.shap_explain import compute_local_shap, top_contributors
 from ml.explain.behavior_map import get_behavior
 from ml.explain.text_explainer import build_explanation_text
 from ml.counterfactual.generate import generate_counterfactual
+from ml.contracts.contract import load_contract, validate_payload, ContractError
+
 
 router = APIRouter(prefix="/engagement", tags=["engagement"])
 
@@ -28,6 +30,11 @@ def analyze(req: AnalyzeRequest):
     """
 
     try:
+        
+        # Contract enforcement (feature version + schema)
+        expected_cols = load_contract(req.feature_version)
+        validate_payload(req.features, expected_cols)
+
         # 1) Predict engagement score
         pred = predict_engagement(req.features)
 
@@ -40,6 +47,7 @@ def analyze(req: AnalyzeRequest):
             shap_top_negative=top_negative,
             shap_top_positive=top_positive,
             status=pred["status"],
+            Status=req.status
         )
 
         # 4) Prepare SHAP outputs
@@ -71,8 +79,11 @@ def analyze(req: AnalyzeRequest):
                         for s in cf["suggestions"]
                     ],
                 )
-
+    
     except FeatureValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    except ContractError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     except FileNotFoundError:
