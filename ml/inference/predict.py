@@ -1,25 +1,22 @@
 import numpy as np
+import xgboost as xgb
 
 from ml.inference.load import load_model, load_feature_columns
 from ml.inference.validate import validate_features
-
 
 ENGAGEMENT_THRESHOLD = 0.85
 
 
 def predict_engagement(features: dict):
-    model = load_model()
+    booster = load_model()  # xgboost.Booster
     feature_columns = load_feature_columns()
 
-    # Validate
     validate_features(features, feature_columns)
 
-    # Arrange features in training order
-    x = np.array([[features[col] for col in feature_columns]])
+    x = np.array([[features[col] for col in feature_columns]], dtype=float)
+    dmat = xgb.DMatrix(x, feature_names=feature_columns)
 
-    # Predict probability (class 1 = engaged)
-    score = float(model.predict_proba(x)[0][1])
-
+    score = float(booster.predict(dmat)[0])
     status = "ENGAGED" if score >= ENGAGEMENT_THRESHOLD else "NOT_ENGAGED"
 
     return {
