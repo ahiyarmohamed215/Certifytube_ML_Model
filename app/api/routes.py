@@ -1,11 +1,18 @@
 from fastapi import APIRouter, HTTPException
-from app.api.schemas import AnalyzeRequest, AnalyzeResponse, ShapContributor
+from app.api.schemas import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    ShapContributor,
+    CounterfactualResponse,
+    CounterfactualSuggestion,
+)
 
 from ml.inference.predict import predict_engagement
 from ml.inference.validate import FeatureValidationError
 from ml.explain.shap_explain import compute_local_shap, top_contributors
 from ml.explain.behavior_map import get_behavior
 from ml.explain.text_explainer import build_explanation_text
+from ml.counterfactual.generate import generate_counterfactual
 
 router = APIRouter(prefix="/engagement", tags=["engagement"])
 
@@ -16,26 +23,26 @@ def analyze(req: AnalyzeRequest):
     Full analysis endpoint:
     - Predict engagement score
     - Compute SHAP local explanations
-    - Generate human-readable explanation text
-    (Counterfactuals added in next class)
+    - Generate explanation text
+    - If NOT engaged: generate counterfactual guidance
     """
 
     try:
         # 1) Predict engagement score
         pred = predict_engagement(req.features)
 
-        # 2) Compute SHAP local explanations
+        # 2) SHAP local explanations
         shap_rows = compute_local_shap(req.features)
         top_negative, top_positive = top_contributors(shap_rows, k=3)
 
-        # 3) Build explanation text
+        # 3) Explanation text
         explanation_text = build_explanation_text(
             shap_top_negative=top_negative,
             shap_top_positive=top_positive,
             status=pred["status"],
         )
 
-        # 4) Prepare SHAP contributor outputs
+        # 4) Prepare SHAP outputs
         def to_contributor(row):
             return ShapContributor(
                 feature=row["feature"],
@@ -46,6 +53,24 @@ def analyze(req: AnalyzeRequest):
 
         shap_top_negative_out = [to_contributor(r) for r in top_negative]
         shap_top_positive_out = [to_contributor(r) for r in top_positive]
+
+        # 5) Counterfactuals only for NOT_ENGAGED
+        counterfactual_out = None
+        if pred["status"] == "NOT_ENGAGED":
+            cf = generate_counterfactual(req.features, target_threshold=pred["threshold"])
+            if cf:
+                counterfactual_out = CounterfactualResponse(
+                    target_threshold=cf["target_threshold"],
+                    suggestions=[
+                        CounterfactualSuggestion(
+                            feature=s["feature"],
+                            current=s["current"],
+                            suggested=s["suggested"],
+                            action=s["action"],
+                        )
+                        for s in cf["suggestions"]
+                    ],
+                )
 
     except FeatureValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -68,5 +93,5 @@ def analyze(req: AnalyzeRequest):
         explanation_text=explanation_text,
         shap_top_negative=shap_top_negative_out,
         shap_top_positive=shap_top_positive_out,
-        counterfactual=None,  # Added in Class 8
+        counterfactual=counterfactual_out,
     )
