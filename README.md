@@ -1,4 +1,18 @@
-# CertifyTube Engagement ML Service (XGBoost + SHAP + Counterfactuals)
+# Transparency-Driven Engagement Analysis for Informal YouTube Learning
+
+This project implements an auditable and explainable machine learning framework
+to assess learner engagement in informal video-based learning environments.
+
+## Features
+- Behavioral feature extraction
+- XGBoost engagement classifier
+- SHAP-based explainability
+- Calibration and threshold analysis
+- REST API for backend integration
+
+## Note
+Model evaluation uses synthetically generated labels for demonstration purposes.
+
 
 This service scores learner engagement from session-level features and returns:
 - Engagement score (0–1)

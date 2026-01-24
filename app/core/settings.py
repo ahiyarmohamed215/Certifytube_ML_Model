@@ -1,6 +1,11 @@
 from __future__ import annotations
 from pydantic import BaseModel
 
+class QuizSettings(BaseModel):
+    gemini_model: str = "gemini-1.5-flash"
+    quiz_pass_threshold: float = 0.80
+
+quiz_settings = QuizSettings()
 
 class Settings(BaseModel):
     # API / model config
