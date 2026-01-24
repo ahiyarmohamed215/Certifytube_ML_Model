@@ -9,6 +9,4 @@ scikit-learn==1.5.1
 xgboost==2.1.1
 shap==0.46.0
 joblib==1.4.2
-git add requirements.txt
-git commit -m "chore: add pinned dependencies"
-git push
+matplotlib==3.9.0

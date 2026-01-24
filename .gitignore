@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual env
+venv/
+.env/
+
+# ML artifacts
+ml/artifacts/
+reports/
+*.joblib
+*.pkl
+
+# Data
+data/processed/
+
+
+# OS
+.DS_Store

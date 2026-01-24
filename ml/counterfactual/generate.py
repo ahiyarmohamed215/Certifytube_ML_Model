@@ -1,80 +1,108 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
+
 import numpy as np
+import xgboost as xgb
 
 from ml.inference.load import load_model, load_feature_columns
 from ml.explain.shap_explain import compute_local_shap, top_contributors
 
-
 TARGET_THRESHOLD = 0.85
 
-
-# Reasonable bounds for common features (tune later if needed)
+# Bounds for common features (tune as needed)
 FEATURE_BOUNDS = {
-    "avg_playback_rate": (0.75, 2.0),
     "completion_ratio": (0.0, 1.0),
     "watch_time_ratio": (0.0, 1.0),
-    "rewatch_ratio": (0.0, 1.0),
-    # counts and seconds: lower bound 0, upper bound left flexible
+    "seek_forward_ratio": (0.0, 1.0),
+    "seek_backward_ratio": (0.0, 1.0),
+    "rewatch_time_ratio": (0.0, 1.0),
+    "pause_freq_per_min": (0.0, 60.0),
+    "attention_index": (0.0, 1.0),
+    "engagement_velocity": (0.0, 5.0),
+    "avg_playback_rate_when_playing": (0.5, 3.0),
 }
 
 
 def _predict_score(features: Dict[str, float]) -> float:
-    model = load_model()
+    booster = load_model()
     cols = load_feature_columns()
-    x = np.array([[features[c] for c in cols]], dtype=float)
-    return float(model.predict_proba(x)[0][1])
+
+    x = np.array([[float(features.get(c, 0.0)) for c in cols]], dtype=float)
+    dmat = xgb.DMatrix(x, feature_names=cols)
+    return float(booster.predict(dmat)[0])
 
 
 def _clamp(feature: str, value: float) -> float:
     if feature in FEATURE_BOUNDS:
         lo, hi = FEATURE_BOUNDS[feature]
         return float(max(lo, min(hi, value)))
-    # Default clamp for non-negative features
     return float(max(0.0, value))
-
-
-def _step_down(value: float, step: float) -> float:
-    return value - step
-
-
-def _step_up(value: float, step: float) -> float:
-    return value + step
 
 
 def _default_step(feature: str, current: float) -> float:
     """
     Heuristic step sizes:
-    - playback rate: reduce in 0.1 increments
-    - ratios: increase in 0.05 increments
-    - counts: decrease by ~10% (at least 1)
-    - seconds: increase/decrease by 10% (min 5)
+      - ratios: +/- 0.05
+      - attention_index: +/- 0.05
+      - playback rate: +/- 0.10
+      - *_sec: +/- 10% (min 5)
+      - *_count: +/- 10% (min 1)
+      - fallback: +/- 10% (min 1)
     """
-    if feature == "avg_playback_rate":
-        return 0.10
     if feature.endswith("_ratio"):
         return 0.05
+    if feature == "attention_index":
+        return 0.05
+    if feature == "avg_playback_rate_when_playing":
+        return 0.10
     if feature.endswith("_count"):
         return max(1.0, round(current * 0.10))
     if feature.endswith("_sec"):
         return max(5.0, round(current * 0.10, 1))
-    # fallback
     return max(1.0, round(current * 0.10))
 
 
 def _suggest_action(feature: str) -> str:
-    if feature.startswith("seek_forward"):
+    # NOTE: This is INTERNAL ONLY (do not show to users).
+    if feature.startswith("seek_forward") or feature.startswith("num_seek_forward"):
         return "reduce skipping"
-    if feature == "avg_playback_rate":
+    if feature == "avg_playback_rate_when_playing":
         return "lower playback speed"
-    if feature.startswith("seek_backward") or feature == "rewatch_ratio":
+    if feature.startswith("seek_backward") or feature.startswith("num_seek_backward") or feature.startswith("rewatch"):
         return "increase rewatching"
-    if feature.startswith("pause"):
-        return "increase reflective pausing"
-    if feature in ("completion_ratio", "watch_time_ratio"):
-        return "increase content coverage"
+    if feature.startswith("pause") or feature.startswith("num_pause"):
+        return "increase pausing"
+    if feature in ("completion_ratio", "watch_time_ratio", "watch_time_sec", "completed_flag"):
+        return "increase coverage"
+    if feature in ("attention_index", "engagement_velocity"):
+        return "increase attention consistency"
     return "adjust behavior"
+
+
+def _direction(feature: str) -> int:
+    """
+    Returns:
+      -1 to decrease feature
+      +1 to increase feature
+
+    This is a heuristic. For real robustness you’d learn monotonic constraints
+    or build per-feature “good direction” metadata.
+    """
+    # Typically harmful when high
+    if feature.startswith("num_seek_forward") or feature.startswith("total_seek_forward") or feature.startswith("avg_seek_forward"):
+        return -1
+    if feature == "avg_playback_rate_when_playing":
+        return -1  # assuming too fast harms engagement
+    if feature.startswith("buffering") or feature.startswith("num_buffering"):
+        return -1  # buffering is generally bad
+    # Typically helpful when high
+    if feature in ("watch_time_ratio", "completion_ratio", "watch_time_sec"):
+        return +1
+    if feature in ("attention_index",):
+        return +1
+    # fallback: decrease
+    return -1
 
 
 def generate_counterfactual(
@@ -84,58 +112,39 @@ def generate_counterfactual(
     top_k_levers: int = 2,
 ) -> Optional[Dict]:
     """
-    Returns None if already meets threshold or if no reasonable counterfactual found.
+    INTERNAL tool.
+    Returns None if already meets threshold or if no counterfactual found.
     Otherwise returns:
     {
       "target_threshold": 0.85,
       "suggestions": [
          {"feature": "...", "current": x, "suggested": y, "action": "..."},
          ...
-      ]
+      ],
+      "best_score": float
     }
     """
     base_score = _predict_score(features)
     if base_score >= target_threshold:
         return None
 
-    # Use SHAP to find most negative contributors (good levers)
     shap_rows = compute_local_shap(features)
     top_negative, _ = top_contributors(shap_rows, k=top_k_levers)
+    levers = [r["feature"] for r in top_negative if "feature" in r]
 
-    levers = [r["feature"] for r in top_negative]
-
-    # Work on a copy
     current = dict(features)
-    suggestions = {}
+    suggestions: Dict[str, Dict] = {}
+    best_score = base_score
 
-    # Strategy:
-    # For each lever, apply small changes iteratively and check score.
-    # - For negative contributors like seek_forward_count or avg_playback_rate: step DOWN
-    # - For positive-type levers (rare in negative list, but just in case): step UP
     for _ in range(max_iters):
-        improved = False
+        improved_any = False
 
         for f in levers:
-            cur_val = float(current[f])
+            cur_val = float(current.get(f, 0.0))
             step = _default_step(f, cur_val)
+            dirn = _direction(f)
 
-            # Decide direction:
-            # If feature is usually "bad when high", reduce it.
-            reduce_features = (
-                f.startswith("seek_forward")
-                or f == "avg_playback_rate"
-                or f.endswith("_count")
-                and f.startswith("seek_forward")
-            )
-
-            # Otherwise if it's a ratio/positive behavior, increase it.
-            if reduce_features or f == "avg_playback_rate" or f.startswith("seek_forward"):
-                new_val = _step_down(cur_val, step)
-            else:
-                new_val = _step_up(cur_val, step)
-
-            new_val = _clamp(f, new_val)
-
+            new_val = _clamp(f, cur_val + dirn * step)
             if new_val == cur_val:
                 continue
 
@@ -143,35 +152,33 @@ def generate_counterfactual(
             trial[f] = new_val
             trial_score = _predict_score(trial)
 
-            # Accept change only if it improves score
-            if trial_score > base_score:
-                base_score = trial_score
+            if trial_score > best_score:
+                best_score = trial_score
                 current = trial
-                improved = True
+                improved_any = True
 
-                # store suggestion (keep latest best)
                 suggestions[f] = {
                     "feature": f,
-                    "current": float(features[f]),
+                    "current": float(features.get(f, 0.0)),
                     "suggested": float(new_val),
                     "action": _suggest_action(f),
                 }
 
-                # stop if threshold met
-                if base_score >= target_threshold:
+                if best_score >= target_threshold:
                     return {
                         "target_threshold": target_threshold,
                         "suggestions": list(suggestions.values()),
+                        "best_score": best_score,
                     }
 
-        if not improved:
+        if not improved_any:
             break
 
-    # If we couldn't reach threshold, still return best-effort suggestions if any
     if suggestions:
         return {
             "target_threshold": target_threshold,
             "suggestions": list(suggestions.values()),
+            "best_score": best_score,
         }
 
     return None

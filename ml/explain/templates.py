@@ -1,45 +1,35 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Set
 
 
-def _join_behaviors(items: List[str]) -> str:
-    # Remove duplicates while preserving order
-    seen = set()
-    cleaned = []
+def _dedupe(items: List[str]) -> List[str]:
+    seen: Set[str] = set()
+    out: List[str] = []
     for x in items:
-        if x and x not in seen:
-            cleaned.append(x)
+        if x and x not in seen and x != "other":
+            out.append(x)
             seen.add(x)
-
-    if not cleaned:
-        return "behavioral patterns"
-
-    if len(cleaned) == 1:
-        return cleaned[0]
-
-    if len(cleaned) == 2:
-        return f"{cleaned[0]} and {cleaned[1]}"
-
-    return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"
+    return out
 
 
-def not_engaged_template(top_negative_behaviors: List[str], top_positive_behaviors: List[str]) -> str:
-    neg = _join_behaviors(top_negative_behaviors)
-    pos = _join_behaviors(top_positive_behaviors)
+def _join(items: List[str]) -> str:
+    if not items:
+        return "key behavioural signals"
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
 
-    # We want the message to feel evidence-driven, not emotional.
-    return (
-        f"Rejected because {neg} outweighed {pos}, "
-        f"indicating low-quality engagement during the session."
-    )
 
+def build_technical_explanation(status: str, pos_behaviors: List[str], neg_behaviors: List[str]) -> str:
+    pos = _dedupe(pos_behaviors)
+    neg = _dedupe(neg_behaviors)
 
-def engaged_template(top_positive_behaviors: List[str], top_negative_behaviors: List[str]) -> str:
-    pos = _join_behaviors(top_positive_behaviors)
-    neg = _join_behaviors(top_negative_behaviors)
+    # avoid duplicates like "coverage vs coverage"
+    neg = [b for b in neg if b not in set(pos)]
 
-    return (
-        f"Accepted because {pos} dominated over {neg}, "
-        f"indicating consistent and attentive engagement during the session."
-    )
+    if status == "ENGAGED":
+        return f"Accepted: positive signals ({_join(pos)}) outweighed negative signals ({_join(neg)})."
+    return f"Rejected: negative signals ({_join(neg)}) outweighed positive signals ({_join(pos)})."
