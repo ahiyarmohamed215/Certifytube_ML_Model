@@ -6,7 +6,7 @@ from typing import Any, Dict
 from google.genai import types
 
 from ml.quiz.gemini.client import get_gemini_client
-from ml.quiz.core.settings import quiz_settings
+from app.core.settings import quiz_settings
 from ml.quiz.gemini.schema import quiz_response_schema
 
 
