@@ -68,6 +68,3 @@ def quiz_response_schema() -> dict:
         },
         "additionalProperties": False,
     }
-git add ml/quiz/gemini/schema.py
-git commit -m "feat(quiz): add Gemini structured output schema for quiz generation"
-git push
