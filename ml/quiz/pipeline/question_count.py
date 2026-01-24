@@ -1,36 +1,66 @@
 from __future__ import annotations
 
 
-def decide_question_count(word_count: int) -> int:
+def decide_question_count(word_count: int, video_duration_sec: float) -> int:
     """
-    Decide number of questions based on transcript length (word count).
+    Decide number of questions using BOTH:
+    - transcript length (word_count)
+    - video duration
 
-    Rationale (simple + defendable):
-    - short transcripts shouldn't generate too many questions (low quality)
-    - long transcripts can support more questions, but we cap it
-
-    Returns: total questions (MCQ + True/False combined)
+    Reason:
+    - transcripts can be noisy/missing
+    - duration is a stable signal
     """
-    if word_count <= 0:
-        return 0
 
-    if word_count < 800:
+    if word_count <= 0 or video_duration_sec <= 0:
         return 5
-    if word_count < 1500:
-        return 8
-    if word_count < 2500:
-        return 12
-    return 15  # cap
+
+    minutes = video_duration_sec / 60.0
+
+    # base from transcript size
+    if word_count < 800:
+        base = 5
+    elif word_count < 1500:
+        base = 8
+    elif word_count < 2500:
+        base = 12
+    else:
+        base = 15
+
+    # adjust by duration
+    if minutes < 6:
+        adj = -1
+    elif minutes < 12:
+        adj = 0
+    elif minutes < 20:
+        adj = +2
+    else:
+        adj = +3
+
+    total = base + adj
+
+    # keep safe bounds
+    if total < 5:
+        total = 5
+    if total > 18:
+        total = 18
+
+    return total
 
 
 def split_question_types(total: int) -> dict:
     """
-    Split questions into MCQ and True/False.
-    Default: 70% MCQ, 30% True/False
+    We will generate:
+    - MCQ (includes fill-in-the-blank MCQ)
+    - True/False
+
+    Default:
+    - 75% MCQ (including blanks)
+    - 25% TF
     """
     if total <= 0:
         return {"mcq": 0, "tf": 0}
 
-    mcq = round(total * 0.7)
+    mcq = round(total * 0.75)
     tf = total - mcq
     return {"mcq": mcq, "tf": tf}

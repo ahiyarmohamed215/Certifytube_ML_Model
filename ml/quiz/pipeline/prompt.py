@@ -3,43 +3,42 @@ from __future__ import annotations
 
 def build_quiz_prompt(
     video_id: str,
+    video_duration_sec: float,
     cleaned_transcript: str,
     mcq_count: int,
     tf_count: int,
 ) -> str:
-    """
-    Prompt designed for structured JSON output.
-    Rules:
-    - Use ONLY the given transcript (no outside knowledge)
-    - Every question must be answerable from transcript
-    - MCQ must have 4 options when possible
-    - Provide answer key + short explanation + source sentence
-    """
+    minutes = round(video_duration_sec / 60.0, 1)
 
     return f"""
 You are generating a quiz from a YouTube video transcript.
 
 STRICT RULES:
-1) Use ONLY the information present in the transcript. Do NOT use external knowledge.
+1) Use ONLY the transcript content. Do NOT use external knowledge.
 2) Every question must be answerable directly from the transcript.
 3) Return JSON only (no markdown, no extra text).
-4) For MCQ:
-   - Provide 4 choices when possible.
-   - Exactly one choice must be correct.
+4) Question mix:
+   - Generate {mcq_count} MCQs total.
+   - At least 40% of MCQs must be fill-in-the-blank style (still MCQ).
+   - Generate {tf_count} True/False questions.
+5) MCQ rules:
+   - Provide exactly 4 choices.
+   - Exactly one correct choice.
    - Distractors must be plausible but wrong based on transcript.
-5) For True/False:
-   - Answer must be exactly "True" or "False".
-6) For each question:
-   - Include a short 1–2 line explanation.
-   - Include the exact source sentence from the transcript that supports the answer.
-7) Avoid duplicates and avoid trivial questions (e.g., pure greetings or filler lines).
-8) Keep stems clear and short. Avoid multi-sentence confusing stems.
+6) Fill-in-the-blank MCQ rules:
+   - Stem must contain a blank like "____".
+   - The correct answer must fit the blank.
+7) True/False rules:
+   - answer must be exactly "True" or "False".
+8) For every question include:
+   - explanation (1–2 lines)
+   - source_sentence copied from transcript that proves the answer
+9) Avoid trivial questions (greetings, filler).
+10) Avoid duplicates.
 
-TASK:
-- Generate {mcq_count} multiple-choice questions (type="mcq")
-- Generate {tf_count} true/false questions (type="tf")
-
-VIDEO_ID: {video_id}
+VIDEO META:
+- VIDEO_ID: {video_id}
+- DURATION_MIN: {minutes}
 
 TRANSCRIPT (cleaned):
 {cleaned_transcript}

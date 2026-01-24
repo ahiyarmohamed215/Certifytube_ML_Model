@@ -1,8 +1,14 @@
-from typing import Any, Dict, List, Literal, Optional
+from __future__ import annotations
 
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 EngagementStatus = Literal["ENGAGED", "NOT_ENGAGED"]
+
+QuizQType = Literal["mcq", "tf"]
+Difficulty = Literal["easy", "medium", "hard"]
+
+video_duration_sec: float = Field(..., ge=1, description="Video length in seconds")
 
 
 class AnalyzeRequest(BaseModel):
@@ -58,3 +64,62 @@ class AnalyzeResponse(BaseModel):
     # Internal only (must be gated)
     counterfactual: Optional[CounterfactualResponse] = None
     debug: Optional[Dict[str, Any]] = None
+
+
+
+
+class QuizGenerateRequest(BaseModel):
+    video_id: str
+    video_duration_sec: float = Field(..., ge=1, description="Video length in seconds")
+    transcript: str
+    difficulty: Difficulty = Field(default="medium")
+    num_questions: Optional[int] = Field(default=None, ge=1, le=20)
+
+class QuizQuestion(BaseModel):
+    qid: str
+    type: QuizQType
+    stem: str
+
+    # For MCQ: choices must exist
+    choices: Optional[List[str]] = None
+
+    # Correct answer:
+    # - for MCQ: exact matching choice string
+    # - for TF: "True" or "False"
+    answer: str
+
+    explanation: str
+    source_sentence: str
+    difficulty: Optional[Difficulty] = None
+
+
+class QuizGenerateResponse(BaseModel):
+    quiz_id: str
+    video_id: str
+    cleaned_transcript_word_count: int
+    questions: List[QuizQuestion]
+
+    # Optional debug for audit
+    debug: Optional[Dict[str, Any]] = None
+
+
+class QuizGradeRequest(BaseModel):
+    quiz_id: str
+    # user answers: { qid: "answer string" }
+    answers: Dict[str, str]
+
+
+class QuizFeedbackItem(BaseModel):
+    qid: str
+    correct: bool
+    correct_answer: str
+    user_answer: Optional[str] = None
+    explanation: Optional[str] = None
+
+
+class QuizGradeResponse(BaseModel):
+    quiz_id: str
+    score: float = Field(..., ge=0.0, le=1.0)
+    threshold: float = Field(..., ge=0.0, le=1.0)
+    passed_threshold: bool
+    feedback: List[QuizFeedbackItem]
