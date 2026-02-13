@@ -5,8 +5,9 @@ to assess learner engagement in informal video-based learning environments.
 
 ## Features
 - Behavioral feature extraction
-- XGBoost engagement classifier
-- SHAP-based explainability
+- **XGBoost** engagement classifier with SHAP-based explainability
+- **EBM (Explainable Boosting Machine)** glass-box classifier with native explanations
+- Dual-model API: choose `model_type` = `"xgboost"` or `"ebm"` at inference time
 - Calibration and threshold analysis
 - REST API for backend integration
 
@@ -17,9 +18,9 @@ Model evaluation uses synthetically generated labels for demonstration purposes.
 This service scores learner engagement from session-level features and returns:
 - Engagement score (0–1)
 - ENGAGED / NOT_ENGAGED decision (threshold = 0.85)
-- SHAP-based local explanations (top positive/negative contributors)
+- SHAP-based (XGBoost) or native (EBM) local explanations
 - Evidence-driven explanation text
-- Counterfactual guidance (only when NOT_ENGAGED)
+
 - Feature contract enforcement (v1.0)
 
 ## Quick Start

@@ -265,7 +265,7 @@ def main():
         "train_session_ids": train_df["session_id"].astype(str).tolist(),
         "test_session_ids": test_df["session_id"].astype(str).tolist(),
         "test_size": TEST_SIZE,
-        "random_state": RANDOM_STATE,
+        "random_state": RANDOM_STATE,  
         "group_col": GROUP_COL,
         "label_col": LABEL_COL,
     }

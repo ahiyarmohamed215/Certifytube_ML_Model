@@ -24,3 +24,17 @@ def predict_engagement(features: dict):
         "threshold": ENGAGEMENT_THRESHOLD,
         "status": status,
     }
+
+
+def predict_engagement_routed(features: dict, model_type: str = "xgboost"):
+    """
+    Route prediction to XGBoost or EBM based on model_type.
+
+    Both return the same dict shape:
+      {"engagement_score": float, "threshold": float, "status": str}
+    """
+    if model_type == "ebm":
+        from ml.inference.predict_ebm import predict_engagement_ebm
+        return predict_engagement_ebm(features)
+    return predict_engagement(features)
+
