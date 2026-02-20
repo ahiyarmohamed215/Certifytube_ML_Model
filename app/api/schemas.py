@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal
 from pydantic import BaseModel, Field, ConfigDict
-
-EngagementStatus = Literal["ENGAGED", "NOT_ENGAGED"]
-
-Difficulty = Literal["easy", "medium", "hard"]
 
 
 class AnalyzeRequest(BaseModel):
@@ -40,11 +36,8 @@ class XGBoostAnalyzeResponse(BaseModel):
     feature_version: str
 
     engagement_score: float = Field(..., ge=0.0, le=1.0)
-    threshold: float = Field(..., ge=0.0, le=1.0)
-    status: EngagementStatus
 
-    explanation: str = Field(..., description="Human-readable explanation of the engagement decision")
-    reason_codes: List[str] = Field(default_factory=list, description="Stable categorical reason codes")
+    explanation: str = Field(..., description="Human-readable explanation of the factors driving the score")
 
     shap_top_negative: List[ShapContributor] = Field(
         default_factory=list,
@@ -76,11 +69,8 @@ class EBMAnalyzeResponse(BaseModel):
     feature_version: str
 
     engagement_score: float = Field(..., ge=0.0, le=1.0)
-    threshold: float = Field(..., ge=0.0, le=1.0)
-    status: EngagementStatus
 
-    explanation: str = Field(..., description="Human-readable explanation of the engagement decision")
-    reason_codes: List[str] = Field(default_factory=list, description="Stable categorical reason codes")
+    explanation: str = Field(..., description="Human-readable explanation of the factors driving the score")
 
     ebm_top_negative: List[EBMContributor] = Field(
         default_factory=list,
@@ -90,30 +80,3 @@ class EBMAnalyzeResponse(BaseModel):
         default_factory=list,
         description="Top features pushing TOWARDS engagement (most positive EBM contributions)",
     )
-
-
-# ---------------------------------------------------------------------------
-# Quiz schemas (unchanged)
-# ---------------------------------------------------------------------------
-
-class QuizGenerateRequest(BaseModel):
-    video_id: str = Field(..., description="YouTube video ID (e.g. 'dQw4w9WgXcQ')")
-    difficulty: Difficulty = Field(default="medium")
-    num_questions: int = Field(default=5, ge=1, le=20)
-
-
-class QuizQuestion(BaseModel):
-    qid: str
-    type: Literal["mcq", "tf"]
-    stem: str
-    choices: Optional[List[str]] = None
-    answer: str
-    explanation: str
-    difficulty: Optional[str] = "medium"
-
-
-class QuizGenerateResponse(BaseModel):
-    quiz_id: str
-    video_id: str
-    questions: List[QuizQuestion]
-    debug: Optional[Dict[str, Any]] = None

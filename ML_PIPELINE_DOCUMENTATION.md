@@ -489,10 +489,7 @@ The ML service is built with **FastAPI** and serves two independent endpoints:
   "session_id": "abc-123",
   "feature_version": "v1.0",
   "engagement_score": 0.92,
-  "threshold": 0.85,
-  "status": "ENGAGED",
-  "explanation": "Engagement was confirmed due to sustained attention and strong coverage.",
-  "reason_codes": ["HIGH_ATTENTION", "HIGH_COVERAGE"],
+  "explanation": "The primary factors influencing this score were sustained attention and content coverage.",
   "shap_top_positive": [
     {
       "feature": "watch_time_ratio",
@@ -520,10 +517,7 @@ The ML service is built with **FastAPI** and serves two independent endpoints:
   "session_id": "abc-123",
   "feature_version": "v1.0",
   "engagement_score": 0.89,
-  "threshold": 0.85,
-  "status": "ENGAGED",
-  "explanation": "Engagement was confirmed due to sustained attention and strong coverage.",
-  "reason_codes": ["HIGH_ATTENTION", "HIGH_COVERAGE"],
+  "explanation": "The primary factors influencing this score were sustained attention and content coverage.",
   "ebm_top_positive": [
     {
       "feature": "watch_time_ratio",
@@ -542,6 +536,8 @@ The ML service is built with **FastAPI** and serves two independent endpoints:
   ]
 }
 ```
+
+> **Note:** The ML service returns only the raw `engagement_score` (0.0–1.0) and a status-neutral `explanation`. The ENGAGED / NOT_ENGAGED classification and threshold decision are handled by the backend service.
 
 **Key differences between the two responses:**
 - `model` field: hard literal (`"xgboost"` vs `"ebm"`)
@@ -568,22 +564,18 @@ Backend sends POST request
    - EBM: Build numpy array → ebm.predict_proba()[:, 1] → probability
         │
         ▼
-4. Threshold Decision
-   - score >= 0.85 → ENGAGED
-   - score < 0.85 → NOT_ENGAGED
-        │
-        ▼
-5. Explanation Generation
+4. Explanation Generation
    - XGBoost: SHAP TreeExplainer → shap_values
    - EBM: explain_local() → exact term scores
         │
         ▼
-6. Text & Reason Codes
-   - Map features → behavioral categories → reason codes
+5. Text Explanation
+   - Map features → behavioral categories
    - Generate human-readable explanation text
         │
         ▼
-7. Return structured JSON response
+6. Return structured JSON response
+   (engagement_score + explanation + top contributors)
 ```
 
 ### 9.6 Feature Contract System
@@ -605,8 +597,7 @@ certifytube_ml_model/
 │   ├── main.py                         # App entry point, router registration
 │   ├── api/
 │   │   ├── schemas.py                  # Pydantic request/response models
-│   │   ├── routes.py                   # /engagement/analyze/* endpoints
-│   │   └── quizz_routes.py            # Quiz generation endpoints
+│   │   └── routes.py                   # /engagement/analyze/* endpoints
 │   └── core/
 │       └── logging.py                  # Logging configuration
 │

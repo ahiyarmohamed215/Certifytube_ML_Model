@@ -40,11 +40,10 @@ def analyze_xgboost(req: AnalyzeRequest):
         shap_rows = compute_local_shap(req.features)
         top_negative, top_positive = top_contributors(shap_rows, k=3)
 
-        # 4) Human-readable explanation + reason codes
-        user_text, _, _, reason_codes = build_user_explanation(
+        # 4) Human-readable explanation
+        user_text = build_user_explanation(
             shap_top_negative=top_negative,
             shap_top_positive=top_positive,
-            status=pred["status"],
         )
 
         # 5) Build SHAP contributor outputs
@@ -60,10 +59,7 @@ def analyze_xgboost(req: AnalyzeRequest):
             session_id=req.session_id,
             feature_version=req.feature_version,
             engagement_score=pred["engagement_score"],
-            threshold=pred["threshold"],
-            status=pred["status"],
             explanation=user_text,
-            reason_codes=reason_codes,
             shap_top_negative=[to_shap_contributor(r) for r in top_negative],
             shap_top_positive=[to_shap_contributor(r) for r in top_positive],
         )
@@ -97,11 +93,10 @@ def analyze_ebm(req: AnalyzeRequest):
         ebm_rows = compute_local_ebm(req.features)
         top_negative, top_positive = top_contributors_ebm(ebm_rows, k=3)
 
-        # 4) Human-readable explanation + reason codes
-        user_text, _, _, reason_codes = build_user_explanation(
+        # 4) Human-readable explanation
+        user_text = build_user_explanation(
             shap_top_negative=top_negative,
             shap_top_positive=top_positive,
-            status=pred["status"],
         )
 
         # 5) Build EBM contributor outputs
@@ -117,10 +112,7 @@ def analyze_ebm(req: AnalyzeRequest):
             session_id=req.session_id,
             feature_version=req.feature_version,
             engagement_score=pred["engagement_score"],
-            threshold=pred["threshold"],
-            status=pred["status"],
             explanation=user_text,
-            reason_codes=reason_codes,
             ebm_top_negative=[to_ebm_contributor(r) for r in top_negative],
             ebm_top_positive=[to_ebm_contributor(r) for r in top_positive],
         )

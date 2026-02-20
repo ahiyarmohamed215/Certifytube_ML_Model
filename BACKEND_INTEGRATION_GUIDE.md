@@ -234,10 +234,7 @@ Content-Type: application/json
   "session_id": "ffacb945-5277-49e6-b173-beb98ddbd91f",
   "feature_version": "v1.0",
   "engagement_score": 0.92,
-  "threshold": 0.85,
-  "status": "ENGAGED",
-  "explanation": "Engagement was confirmed for this session due to sustained attention and strong coverage.",
-  "reason_codes": ["HIGH_ATTENTION", "HIGH_COVERAGE"],
+  "explanation": "The primary factors influencing this score were attention consistency and content coverage.",
   "shap_top_positive": [
     {
       "feature": "watch_time_ratio",
@@ -296,10 +293,7 @@ Same request body as XGBoost — identical JSON structure.
   "session_id": "ffacb945-5277-49e6-b173-beb98ddbd91f",
   "feature_version": "v1.0",
   "engagement_score": 0.89,
-  "threshold": 0.85,
-  "status": "ENGAGED",
-  "explanation": "Engagement was confirmed for this session due to sustained attention and strong coverage.",
-  "reason_codes": ["HIGH_ATTENTION", "HIGH_COVERAGE"],
+  "explanation": "The primary factors influencing this score were attention consistency and content coverage.",
   "ebm_top_positive": [
     {
       "feature": "watch_time_ratio",
@@ -349,10 +343,7 @@ Same request body as XGBoost — identical JSON structure.
 | `session_id` | string | Echo of request session_id |
 | `feature_version` | string | Echo of request version |
 | `engagement_score` | float (0.0–1.0) | Model's predicted probability of engagement |
-| `threshold` | float | Decision threshold (currently 0.85) |
-| `status` | `"ENGAGED"` or `"NOT_ENGAGED"` | `score >= threshold` → ENGAGED |
-| `explanation` | string | Human-readable text explaining the decision |
-| `reason_codes` | string[] | Stable enumerated codes (see below) |
+| `explanation` | string | Human-readable text explaining the factors driving the score |
 
 ### XGBoost-Only Fields
 
@@ -386,37 +377,8 @@ Same request body as XGBoost — identical JSON structure.
 | `feature_value` | float | The raw value sent for this feature |
 | `behavior_category` | string | Behavioral category (see category list below) |
 
----
 
-## 6. Behavior Categories & Reason Codes
-
-### Behavior Categories
-
-| Category | Features in This Category |
-|----------|--------------------------|
-| `coverage` | `watch_time_ratio`, `completion_ratio`, `watch_time_sec`, `completed_flag`, `last_position_sec` |
-| `reflective_pausing` | `num_pause`, `total_pause_duration_sec`, `avg_pause_duration_sec`, `median_pause_duration_sec`, `pause_freq_per_min`, `long_pause_count`, `long_pause_ratio` |
-| `skipping` | `num_seek_forward`, `total_seek_forward_sec`, `skip_time_ratio`, `early_skip_flag`, `skim_flag` |
-| `rewatching` | `num_seek_backward`, `total_seek_backward_sec`, `rewatch_time_ratio`, `deep_flag` |
-| `speed_watching` | `avg_playback_rate_when_playing`, `fast_ratio`, `slow_ratio`, `playback_speed_variance`, `num_ratechange` |
-| `attention_consistency` | `attention_index`, `engagement_velocity`, `seek_density_per_min`, `play_pause_ratio` |
-| `playback_quality` | `num_buffering_events`, `buffering_time_sec`, `buffering_freq_per_min` |
-
-### Possible Reason Codes
-
-| Reason Code | Direction | Meaning |
-|-------------|-----------|---------|
-| `HIGH_COVERAGE` | Positive | Learner watched most of the video |
-| `LOW_COVERAGE` | Negative | Learner watched very little |
-| `HIGH_ATTENTION` | Positive | Consistent attention throughout |
-| `LOW_ATTENTION` | Negative | Attention was inconsistent |
-| `REFLECTIVE_PAUSING` | Positive | Pausing behavior suggests thinking |
-| `EXCESSIVE_PAUSING` | Negative | Too much pausing / possible disengagement |
-| `CONTENT_REVIEW` | Positive | Rewatching behavior (going back) |
-| `CONTENT_SKIPPING` | Negative | Significant forward skipping |
-| `NORMAL_SPEED` | Positive | Watching at normal speed |
-| `SPEED_RUSHING` | Negative | Playing at high speed (rushing) |
-| `PLAYBACK_INTERRUPTION` | Negative | Buffering issues affected the session |
+> **Note:** The ML service returns only the raw `engagement_score` and `explanation`. The ENGAGED / NOT_ENGAGED decision and threshold comparison should be handled by your backend.
 
 ---
 
@@ -545,10 +507,8 @@ async function analyzeEngagement(
 
 // Usage:
 const result = await analyzeEngagement("session-123", computedFeatures, "xgboost");
-console.log(result.status);       // "ENGAGED" or "NOT_ENGAGED"
 console.log(result.engagement_score);  // 0.92
-console.log(result.explanation);       // "Engagement was confirmed..."
-console.log(result.reason_codes);      // ["HIGH_ATTENTION", "HIGH_COVERAGE"]
+console.log(result.explanation);       // "The primary factors influencing this score were..."
 ```
 
 ### cURL (Quick Test)
@@ -633,8 +593,16 @@ curl -X POST http://localhost:8000/engagement/analyze/xgboost \
                     │  xgboost (or ebm)            │
                     └──────────────┬──────────────┘
                                    │
+                    ┌──────────────▼──────────────┐
+                    │  ML returns:                 │
+                    │  - engagement_score (0–1)    │
+                    │  - explanation (text)        │
+                    │  - top contributors          │
+                    └──────────────┬──────────────┘
+                                   │
                          ┌─────────▼─────────┐
-                         │ status == ENGAGED? │
+                         │ Backend decides:   │
+                         │ score >= threshold?│
                          └────┬─────────┬────┘
                               │         │
                          YES  │         │  NO
@@ -645,7 +613,6 @@ curl -X POST http://localhost:8000/engagement/analyze/xgboost \
                     │            │  │                 │
                     │ Store:     │  │ Store:          │
                     │ - score    │  │ - score         │
-                    │ - reasons  │  │ - reasons       │
                     │ - explain  │  │ - explain       │
                     └────────────┘  └─────────────────┘
 ```
@@ -657,9 +624,8 @@ curl -X POST http://localhost:8000/engagement/analyze/xgboost \
 | `session_id` | Request | VARCHAR |
 | `model_used` | Response → `model` | VARCHAR |
 | `engagement_score` | Response → `engagement_score` | FLOAT |
-| `status` | Response → `status` | ENUM |
+| `status` | Backend decision (score ≥ threshold) | ENUM |
 | `explanation` | Response → `explanation` | TEXT |
-| `reason_codes` | Response → `reason_codes` | JSON/ARRAY |
 | `top_positive` | Response → `shap_top_positive` or `ebm_top_positive` | JSON |
 | `top_negative` | Response → `shap_top_negative` or `ebm_top_negative` | JSON |
 | `analyzed_at` | Your timestamp | TIMESTAMP |

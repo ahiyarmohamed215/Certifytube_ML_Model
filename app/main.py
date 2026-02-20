@@ -4,17 +4,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.api.routes import router as engagement_router
-from app.api.quizz_routes import router as quiz_router
 
 app = FastAPI(
     title="CertifyTube ML Service",
-    version="1.1.0",
-    description="Engagement (XGBoost+SHAP | EBM+NativeExplain) + Quiz (Gemini video-based quiz generation)",
+    version="2.0.0",
+    description="Engagement scoring with explanations (XGBoost+SHAP | EBM+NativeExplain)",
 )
 
 # Routers
 app.include_router(engagement_router)
-app.include_router(quiz_router)
 
 
 @app.get("/health")
