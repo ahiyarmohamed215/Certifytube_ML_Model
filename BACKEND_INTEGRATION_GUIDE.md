@@ -12,6 +12,7 @@ ML Server:   uvicorn app.main:app --host 0.0.0.0 --port 8000
 Health:      GET  /health                         → {"status": "ok"}
 XGBoost:     POST /engagement/analyze/xgboost     → XGBoostAnalyzeResponse
 EBM:         POST /engagement/analyze/ebm         → EBMAnalyzeResponse
+Quiz:        POST /quiz/generate                  → GenerateQuizResponse
 Swagger UI:  GET  /docs                           → Interactive API docs
 ```
 
@@ -382,6 +383,113 @@ Same request body as XGBoost — identical JSON structure.
 
 ---
 
+## 6. Quiz Endpoint (Video ID → Questions)
+
+The ML service fetches the YouTube transcript automatically from the `video_id`. Transcripts are **cached in MySQL** inside the ML service — the first request fetches from YouTube, subsequent requests use the cached version.
+
+### Request
+
+```
+POST /quiz/generate
+Content-Type: application/json
+```
+
+**Option A — Using video_id (recommended):**
+
+```json
+{
+  "session_id": "quiz-session-001",
+  "video_id": "rfscVS0vtbw",
+  "video_title": "Python Tutorial for Beginners",
+  "video_duration_sec": 14400,
+  "num_questions": 5,
+  "include_coding": false
+}
+```
+
+**Option B — Using raw transcript (fallback):**
+
+```json
+{
+  "session_id": "quiz-session-001",
+  "transcript": "Gradient descent updates model weights by moving opposite to the gradient. The learning rate controls step size.",
+  "video_title": "Gradient Descent Basics",
+  "video_duration_sec": 780,
+  "num_questions": 4,
+  "include_coding": false
+}
+```
+
+> **Note:** If both `video_id` and `transcript` are provided, `transcript` takes priority. At least one must be provided.
+
+### Response (200 OK)
+
+```json
+{
+  "session_id": "quiz-session-001",
+  "questions": [
+    {
+      "question_id": "q1",
+      "type": "mcq",
+      "question": "What does the learning rate control in gradient descent?",
+      "options": [
+        "The step size of each update",
+        "The number of model parameters",
+        "The size of the dataset",
+        "The loss function type"
+      ],
+      "correct_answer": "The step size of each update",
+      "explanation": "The transcript states that learning rate controls step size.",
+      "source_segment": "Gradient descent updates model weights by moving opposite to the gradient. The learning rate controls step size.",
+      "difficulty": "easy",
+      "bloom_level": "understand"
+    }
+  ],
+  "total_questions": 1,
+  "has_coding_questions": false
+}
+```
+
+### Quiz Request Rules
+
+| Field | Type | Rules |
+|------|------|------|
+| `session_id` | string | Required |
+| `video_id` | string | Optional — YouTube video ID or full URL. ML service fetches transcript automatically |
+| `transcript` | string | Optional — raw transcript text (min length 20). Takes priority over `video_id` |
+| `video_title` | string | Required, min length 2 |
+| `video_duration_sec` | float | Required, must be > 0 |
+| `num_questions` | int | Optional, 1 to 20. If omitted, LLM decides count from transcript length |
+| `max_questions` | int | Optional, 1 to 20 (default 20). Upper bound cap |
+| `include_coding` | bool | If `true`, coding questions are allowed when code-like transcript content is detected |
+
+> **Important:** Either `video_id` or `transcript` must be provided. Sending neither returns `422`.
+
+### Quiz Error Notes
+
+- `400`: invalid video_id / transcript too short / validation issues
+- `422`: neither `video_id` nor `transcript` provided
+- `502`: upstream LLM/provider issue (retryable)
+- `500`: internal processing error
+
+### Transcript Caching
+
+The ML service maintains a MySQL `transcripts` table:
+
+```sql
+CREATE TABLE transcripts (
+    video_id VARCHAR(20) PRIMARY KEY,
+    transcript LONGTEXT NOT NULL,
+    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+- **First request** for a video_id: fetches from YouTube API, saves to MySQL, generates quiz
+- **Subsequent requests** for the same video_id: reads from MySQL cache (fast), generates quiz
+- Your backend does **NOT** need to manage transcripts — the ML service handles this entirely
+
+---
+
 ## 7. Error Responses
 
 ### 400 — Bad Request
@@ -575,13 +683,18 @@ curl -X POST http://localhost:8000/engagement/analyze/xgboost \
 
 ---
 
-## 9. Decision Logic for Backend
+## 9. Dual-Verification Decision Logic
 
 ```
                     ┌─────────────────────────────┐
                     │  Learner finishes watching   │
                     │  a video session             │
                     └──────────────┬──────────────┘
+                                   │
+          ════════════════════════════════════════════
+          ║        VERIFICATION LAYER 1              ║
+          ║        Engagement Analysis               ║
+          ════════════════════════════════════════════
                                    │
                     ┌──────────────▼──────────────┐
                     │  Backend computes 49         │
@@ -596,43 +709,195 @@ curl -X POST http://localhost:8000/engagement/analyze/xgboost \
                     ┌──────────────▼──────────────┐
                     │  ML returns:                 │
                     │  - engagement_score (0–1)    │
-                    │  - explanation (text)        │
+                    │  - explanation (friendly)    │
                     │  - top contributors          │
                     └──────────────┬──────────────┘
                                    │
                          ┌─────────▼─────────┐
                          │ Backend decides:   │
-                         │ score >= threshold?│
+                         │ score >= 0.85?     │
                          └────┬─────────┬────┘
                               │         │
                          YES  │         │  NO
                               │         │
-                    ┌─────────▼──┐  ┌───▼────────────┐
-                    │ Grant      │  │ Don't grant     │
-                    │ certificate│  │ certificate     │
-                    │            │  │                 │
-                    │ Store:     │  │ Store:          │
-                    │ - score    │  │ - score         │
-                    │ - explain  │  │ - explain       │
-                    └────────────┘  └─────────────────┘
+                              │    ┌────▼────────────┐
+                              │    │ Don't grant      │
+                              │    │ Show explanation  │
+                              │    │ to learner        │
+                              │    └─────────────────┘
+                              │
+          ════════════════════════════════════════════
+          ║        VERIFICATION LAYER 2              ║
+          ║        Quiz Verification                 ║
+          ════════════════════════════════════════════
+                              │
+                    ┌─────────▼──────────┐
+                    │  POST /quiz/generate│
+                    │  { video_id: ... }  │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │  ML fetches/caches  │
+                    │  transcript & sends │
+                    │  quiz questions     │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │  Learner takes quiz │
+                    │  Backend grades it  │
+                    └─────────┬──────────┘
+                              │
+                    ┌─────────▼──────────┐
+                    │  Quiz score >= pass │
+                    │  threshold?         │
+                    └────┬──────────┬────┘
+                         │          │
+                    YES  │          │  NO
+                         │          │
+               ┌─────────▼──┐  ┌───▼────────────┐
+               │ Grant       │  │ Don't grant     │
+               │ certificate │  │ certificate     │
+               └─────────────┘  └─────────────────┘
 ```
 
+---
+
 ### What to Store in Your Database
+
+#### Engagement Results Table
 
 | Column | Source | Type |
 |--------|--------|------|
 | `session_id` | Request | VARCHAR |
 | `model_used` | Response → `model` | VARCHAR |
 | `engagement_score` | Response → `engagement_score` | FLOAT |
-| `status` | Backend decision (score ≥ threshold) | ENUM |
+| `status` | Backend decision (score ≥ 0.85) | ENUM(ENGAGED, NOT_ENGAGED) |
 | `explanation` | Response → `explanation` | TEXT |
 | `top_positive` | Response → `shap_top_positive` or `ebm_top_positive` | JSON |
 | `top_negative` | Response → `shap_top_negative` or `ebm_top_negative` | JSON |
 | `analyzed_at` | Your timestamp | TIMESTAMP |
 
+#### Quiz Results Table
+
+| Column | Source | Type |
+|--------|--------|------|
+| `quiz_id` | Auto-generated | BIGINT / UUID |
+| `session_id` | Links to engagement result | VARCHAR |
+| `video_id` | YouTube video ID sent to ML | VARCHAR(20) |
+| `questions` | Full response → `questions` array | JSON |
+| `total_questions` | Response → `total_questions` | INT |
+| `learner_answers` | Collected from learner during quiz | JSON |
+| `quiz_score` | Backend-computed (correct / total) | FLOAT |
+| `passed` | Backend decision (quiz_score ≥ pass threshold) | BOOLEAN |
+| `quiz_taken_at` | Your timestamp | TIMESTAMP |
+
+> **Note:** The ML service generates and returns the quiz questions + correct answers. Your backend is responsible for:
+> 1. Presenting the questions to the learner
+> 2. Collecting the learner's answers
+> 3. Grading (comparing answers vs `correct_answer`)
+> 4. Storing the results
+> 5. Making the final certification decision
+
 ---
 
-## 10. Which Model Should I Call?
+### Explanation Format Examples
+
+The `explanation` field in engagement responses now uses friendly, conversational messages:
+
+**Engaged learner (score ≥ 0.85):**
+```
+Congratulations! Your engagement score is 93%. Your attention stayed
+consistent throughout — well done! Keep this up in your next session!
+```
+
+**Not engaged learner (score < 0.85):**
+```
+Your engagement score is 58%. It looks like you skipped through some
+sections. Try watching the full lesson flow — the concepts build on
+each other!
+```
+
+These messages are generated based on the top contributing behavior categories (skipping, coverage, attention, etc.). They are suitable for displaying directly to the learner.
+
+---
+
+## 10. Java (Spring Boot) Integration Examples
+
+### Quiz Service Client
+
+```java
+@Service
+public class MlQuizClient {
+    private final RestTemplate rest = new RestTemplate();
+    private static final String ML_BASE_URL = "http://ml-server:8000";
+
+    public QuizResponse generateQuiz(String sessionId, String videoId,
+                                     String videoTitle, double videoDurationSec,
+                                     int numQuestions) {
+        String url = ML_BASE_URL + "/quiz/generate";
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("session_id", sessionId);
+        body.put("video_id", videoId);           // ML service fetches transcript
+        body.put("video_title", videoTitle);
+        body.put("video_duration_sec", videoDurationSec);
+        body.put("num_questions", numQuestions);
+        body.put("include_coding", false);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+        ResponseEntity<QuizResponse> response = rest.postForEntity(
+            url, request, QuizResponse.class
+        );
+        return response.getBody();
+    }
+}
+```
+
+### Quiz Response DTO
+
+```java
+public record QuizResponse(
+    String sessionId,
+    List<QuizQuestion> questions,
+    int totalQuestions,
+    boolean hasCodingQuestions
+) {}
+
+public record QuizQuestion(
+    String questionId,
+    String type,           // "mcq", "true_false", "fill_blank", "short_answer", "coding"
+    String question,
+    List<String> options,  // null for non-MCQ types
+    String correctAnswer,
+    String explanation,
+    String sourceSegment,
+    String difficulty,     // "easy", "medium", "hard"
+    String bloomLevel      // "remember", "understand", "apply", "analyze"
+) {}
+```
+
+### Grading Logic (Backend Responsibility)
+
+```java
+public double gradeQuiz(List<QuizQuestion> questions, Map<String, String> learnerAnswers) {
+    int correct = 0;
+    for (QuizQuestion q : questions) {
+        String learnerAnswer = learnerAnswers.get(q.questionId());
+        if (learnerAnswer != null &&
+            learnerAnswer.trim().equalsIgnoreCase(q.correctAnswer().trim())) {
+            correct++;
+        }
+    }
+    return (double) correct / questions.size();
+}
+```
+
+---
+
+## 11. Which Model Should I Call?
 
 | Use Case | Recommended Model | Why |
 |----------|-------------------|-----|

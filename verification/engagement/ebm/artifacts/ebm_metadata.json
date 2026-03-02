@@ -1,0 +1,297 @@
+{
+  "trained_at": "2026-02-12T20:57:43.131536",
+  "model": "ExplainableBoostingClassifier",
+  "interpret_version": ">=0.6.4",
+  "n_features": 49,
+  "feature_columns": [
+    "session_duration_sec",
+    "video_duration_sec",
+    "last_position_sec",
+    "completed_flag",
+    "watch_time_sec",
+    "watch_time_ratio",
+    "completion_ratio",
+    "engagement_velocity",
+    "num_pause",
+    "total_pause_duration_sec",
+    "avg_pause_duration_sec",
+    "median_pause_duration_sec",
+    "pause_freq_per_min",
+    "long_pause_count",
+    "long_pause_ratio",
+    "num_seek",
+    "num_seek_forward",
+    "num_seek_backward",
+    "total_seek_forward_sec",
+    "total_seek_backward_sec",
+    "avg_seek_forward_sec",
+    "avg_seek_backward_sec",
+    "largest_forward_seek_sec",
+    "largest_backward_seek_sec",
+    "seek_jump_std_sec",
+    "seek_forward_ratio",
+    "seek_backward_ratio",
+    "skip_time_ratio",
+    "rewatch_time_ratio",
+    "rewatch_to_skip_ratio",
+    "seek_density_per_min",
+    "first_seek_time_sec",
+    "early_skip_flag",
+    "num_ratechange",
+    "time_at_speed_lt1x_sec",
+    "time_at_speed_1x_sec",
+    "time_at_speed_gt1x_sec",
+    "fast_ratio",
+    "slow_ratio",
+    "playback_speed_variance",
+    "avg_playback_rate_when_playing",
+    "unique_speed_levels",
+    "num_buffering_events",
+    "buffering_time_sec",
+    "buffering_freq_per_min",
+    "play_pause_ratio",
+    "attention_index",
+    "skim_flag",
+    "deep_flag"
+  ],
+  "label_col": "engagement_label",
+  "group_col": "user_id",
+  "test_size": 0.2,
+  "random_state": 42,
+  "engagement_threshold": 0.85,
+  "drop_cols": [
+    "engagement_label",
+    "user_id",
+    "session_id",
+    "video_id",
+    "video_title"
+  ],
+  "best_params": {
+    "max_bins": 256,
+    "learning_rate": 0.01,
+    "max_leaves": 2,
+    "min_samples_leaf": 8,
+    "interactions": 10,
+    "max_interaction_bins": 16
+  },
+  "cv_best_auc": 0.98912,
+  "total_trials": 40,
+  "search_strategy": "random",
+  "top_10_trials": [
+    {
+      "trial": 6,
+      "params": {
+        "max_bins": 256,
+        "learning_rate": 0.01,
+        "max_leaves": 2,
+        "min_samples_leaf": 8,
+        "interactions": 10,
+        "max_interaction_bins": 16
+      },
+      "mean_auc": 0.98912,
+      "std_auc": 0.003829
+    },
+    {
+      "trial": 8,
+      "params": {
+        "max_bins": 512,
+        "learning_rate": 0.02,
+        "max_leaves": 2,
+        "min_samples_leaf": 15,
+        "interactions": 5,
+        "max_interaction_bins": 64
+      },
+      "mean_auc": 0.987964,
+      "std_auc": 0.003183
+    },
+    {
+      "trial": 12,
+      "params": {
+        "max_bins": 512,
+        "learning_rate": 0.02,
+        "max_leaves": 2,
+        "min_samples_leaf": 5,
+        "interactions": 8,
+        "max_interaction_bins": 16
+      },
+      "mean_auc": 0.987761,
+      "std_auc": 0.003921
+    },
+    {
+      "trial": 25,
+      "params": {
+        "max_bins": 512,
+        "learning_rate": 0.08,
+        "max_leaves": 2,
+        "min_samples_leaf": 4,
+        "interactions": 10,
+        "max_interaction_bins": 16
+      },
+      "mean_auc": 0.987602,
+      "std_auc": 0.002488
+    },
+    {
+      "trial": 29,
+      "params": {
+        "max_bins": 256,
+        "learning_rate": 0.005,
+        "max_leaves": 2,
+        "min_samples_leaf": 2,
+        "interactions": 8,
+        "max_interaction_bins": 64
+      },
+      "mean_auc": 0.987397,
+      "std_auc": 0.00334
+    },
+    {
+      "trial": 20,
+      "params": {
+        "max_bins": 256,
+        "learning_rate": 0.03,
+        "max_leaves": 2,
+        "min_samples_leaf": 2,
+        "interactions": 3,
+        "max_interaction_bins": 16
+      },
+      "mean_auc": 0.987086,
+      "std_auc": 0.00366
+    },
+    {
+      "trial": 15,
+      "params": {
+        "max_bins": 256,
+        "learning_rate": 0.05,
+        "max_leaves": 2,
+        "min_samples_leaf": 4,
+        "interactions": 8,
+        "max_interaction_bins": 64
+      },
+      "mean_auc": 0.986399,
+      "std_auc": 0.00374
+    },
+    {
+      "trial": 10,
+      "params": {
+        "max_bins": 256,
+        "learning_rate": 0.005,
+        "max_leaves": 4,
+        "min_samples_leaf": 2,
+        "interactions": 8,
+        "max_interaction_bins": 64
+      },
+      "mean_auc": 0.983663,
+      "std_auc": 0.001367
+    },
+    {
+      "trial": 18,
+      "params": {
+        "max_bins": 512,
+        "learning_rate": 0.005,
+        "max_leaves": 5,
+        "min_samples_leaf": 10,
+        "interactions": 8,
+        "max_interaction_bins": 32
+      },
+      "mean_auc": 0.983545,
+      "std_auc": 0.002122
+    },
+    {
+      "trial": 31,
+      "params": {
+        "max_bins": 512,
+        "learning_rate": 0.005,
+        "max_leaves": 4,
+        "min_samples_leaf": 10,
+        "interactions": 5,
+        "max_interaction_bins": 32
+      },
+      "mean_auc": 0.982946,
+      "std_auc": 0.002612
+    }
+  ],
+  "metrics_test": {
+    "model": "EBM (ExplainableBoostingClassifier)",
+    "auc_roc": 0.992470774717654,
+    "auc_pr": 0.9920925928107431,
+    "precision_0.5": 0.968421052631579,
+    "recall_0.5": 0.9387755102040817,
+    "f1_0.5": 0.9533678756476683,
+    "precision_0.85": 0.9659090909090909,
+    "recall_0.85": 0.8673469387755102,
+    "f1_0.85": 0.9139784946236559,
+    "confusion_matrix_0.85": [
+      [
+        100,
+        3
+      ],
+      [
+        13,
+        85
+      ]
+    ],
+    "threshold_used": 0.85,
+    "cv_best_auc": 0.9891195989306368
+  },
+  "n_terms": 59,
+  "term_names": [
+    "session_duration_sec",
+    "video_duration_sec",
+    "last_position_sec",
+    "completed_flag",
+    "watch_time_sec",
+    "watch_time_ratio",
+    "completion_ratio",
+    "engagement_velocity",
+    "num_pause",
+    "total_pause_duration_sec",
+    "avg_pause_duration_sec",
+    "median_pause_duration_sec",
+    "pause_freq_per_min",
+    "long_pause_count",
+    "long_pause_ratio",
+    "num_seek",
+    "num_seek_forward",
+    "num_seek_backward",
+    "total_seek_forward_sec",
+    "total_seek_backward_sec",
+    "avg_seek_forward_sec",
+    "avg_seek_backward_sec",
+    "largest_forward_seek_sec",
+    "largest_backward_seek_sec",
+    "seek_jump_std_sec",
+    "seek_forward_ratio",
+    "seek_backward_ratio",
+    "skip_time_ratio",
+    "rewatch_time_ratio",
+    "rewatch_to_skip_ratio",
+    "seek_density_per_min",
+    "first_seek_time_sec",
+    "early_skip_flag",
+    "num_ratechange",
+    "time_at_speed_lt1x_sec",
+    "time_at_speed_1x_sec",
+    "time_at_speed_gt1x_sec",
+    "fast_ratio",
+    "slow_ratio",
+    "playback_speed_variance",
+    "avg_playback_rate_when_playing",
+    "unique_speed_levels",
+    "num_buffering_events",
+    "buffering_time_sec",
+    "buffering_freq_per_min",
+    "play_pause_ratio",
+    "attention_index",
+    "skim_flag",
+    "deep_flag",
+    "session_duration_sec & deep_flag",
+    "last_position_sec & time_at_speed_gt1x_sec",
+    "last_position_sec & fast_ratio",
+    "watch_time_ratio & fast_ratio",
+    "num_pause & attention_index",
+    "total_pause_duration_sec & median_pause_duration_sec",
+    "num_seek_backward & rewatch_to_skip_ratio",
+    "total_seek_forward_sec & attention_index",
+    "avg_seek_backward_sec & fast_ratio",
+    "time_at_speed_lt1x_sec & fast_ratio"
+  ]
+}

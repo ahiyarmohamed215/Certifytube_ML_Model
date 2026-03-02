@@ -1,20 +1,25 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
-from dotenv import load_dotenv
-load_dotenv()
+from app.api.engagement_routes import router as engagement_router
+from app.api.quiz_routes import router as quiz_router
 
-from app.api.routes import router as engagement_router
+load_dotenv()
 
 app = FastAPI(
     title="CertifyTube ML Service",
-    version="2.0.0",
-    description="Engagement scoring with explanations (XGBoost+SHAP | EBM+NativeExplain)",
+    version="3.1.0",
+    description=(
+        "Dual-verification ML service: "
+        "Layer 1 - engagement scoring (XGBoost + SHAP, EBM + native explainability); "
+        "Layer 2 - transcript-grounded quiz generation with answers and explanations."
+    ),
 )
 
-# Routers
 app.include_router(engagement_router)
+app.include_router(quiz_router)
 
 
 @app.get("/health")
-def health():
+def health() -> dict[str, str]:
     return {"status": "ok"}

@@ -5,7 +5,10 @@ __pycache__/
 
 # Virtual env
 venv/
-.env.example
+.venv/
+.env
+.env.*
+!.env.example
 .env/
 
 # ML artifacts
@@ -17,6 +20,13 @@ reports/
 # Data
 data/processed/
 
+# Testing
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
 
 # OS
 .DS_Store
+Thumbs.db
