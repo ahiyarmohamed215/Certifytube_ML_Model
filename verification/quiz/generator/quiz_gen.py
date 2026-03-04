@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 import time
@@ -21,6 +22,8 @@ from verification.quiz.generator.prompts import (
 )
 from verification.quiz.transcript.processor import ProcessedTranscript
 from verification.quiz.validator.groundedness import validate_question_grounded
+
+log = logging.getLogger(__name__)
 
 QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "coding"]
 
@@ -97,8 +100,10 @@ def _call_openrouter(prompt: str, request_timeout_seconds: float | None = None) 
         with httpx.Client(timeout=timeout_seconds) as client:
             response = client.post(endpoint, headers=headers, json=payload)
     except httpx.HTTPError as exc:
+        log.exception("OpenRouter HTTP error: %s", exc)
         raise QuizGenerationError(f"Failed to contact OpenRouter: {exc}") from exc
     if response.status_code >= 400:
+        log.error("OpenRouter returned %d: %s", response.status_code, response.text[:300])
         raise QuizGenerationError(
             f"OpenRouter request failed: {response.status_code} {response.text[:300]}"
         )
@@ -147,9 +152,9 @@ def _coerce_int(value: object) -> Optional[int]:
 
 def _heuristic_question_count(video_duration_sec: float, max_questions: int) -> int:
     duration_minutes = max(1.0, video_duration_sec / 60.0)
-    # Roughly one question per 3 minutes, with a minimum floor.
+    # Roughly one question per 3 minutes, minimum 4.
     estimated = int(math.ceil(duration_minutes / 3.0))
-    return max(1, min(max_questions, estimated))
+    return max(4, min(max_questions, estimated))
 
 
 def _time_budget_question_cap() -> int:
@@ -191,7 +196,8 @@ def _plan_question_count(
 
     try:
         plan = _call_openrouter(prompt, request_timeout_seconds=remaining_budget)
-    except QuizGenerationError:
+    except QuizGenerationError as exc:
+        log.warning("Planning LLM call failed, using heuristic: %s", exc)
         return fallback
 
     planned = _coerce_int(plan.get("question_count"))
@@ -326,7 +332,7 @@ def _generate_one(
         if validation.is_grounded:
             return question
         retry_feedback = validation.reason
-    raise QuizGenerationError(f"Question {question_id} failed groundedness checks.")
+    raise QuizGenerationError(f"Question {question_id} failed groundedness checks after {max_attempts} attempts.")
 
 
 def _fallback_quiz_questions(
@@ -334,40 +340,101 @@ def _fallback_quiz_questions(
     include_coding: bool,
     count: int,
 ) -> List[Dict[str, object]]:
+    """Generate transcript-grounded fallback questions with varied types."""
     questions: List[Dict[str, object]] = []
-    safe_count = max(1, count)
+    safe_count = max(4, count)  # Always generate at least 4
+
+    # Cycle through all question types for variety
+    type_cycle = cycle(["mcq", "true_false", "fill_blank", "short_answer"])
+    difficulty_cycle = cycle(["easy", "medium", "hard"])
 
     for index in range(1, safe_count + 1):
         chunk = transcript.chunks[(index - 1) % len(transcript.chunks)]
-        if include_coding and index == safe_count:
+        # Take a short excerpt for context in the question
+        excerpt = chunk.text[:200].strip()
+        q_type = next(type_cycle)
+        difficulty = next(difficulty_cycle)
+
+        if q_type == "mcq":
             questions.append(
                 {
                     "question_id": f"q{index}",
-                    "type": "coding",
-                    "question": "Write a short code snippet that applies the key concept explained in this segment.",
-                    "options": None,
-                    "correct_answer": "A valid solution should implement the main technique described in the transcript segment.",
-                    "explanation": "This checks practical application of the lesson concept in code.",
+                    "type": "mcq",
+                    "question": f"Based on the video content, which of the following best describes the main concept discussed: '{excerpt}...'?",
+                    "options": [
+                        "The concept described in this segment is correct as stated",
+                        "The concept applies only in unrelated contexts",
+                        "The concept contradicts standard practices",
+                        "The concept was not mentioned in the video",
+                    ],
+                    "correct_answer": "The concept described in this segment is correct as stated",
+                    "explanation": "This question tests whether you understood the key concept from the video segment.",
                     "source_segment": chunk.text,
-                    "difficulty": "medium",
-                    "bloom_level": "apply",
+                    "difficulty": difficulty,
+                    "bloom_level": "understand",
                 }
             )
-            continue
-
-        questions.append(
-            {
-                "question_id": f"q{index}",
-                "type": "short_answer",
-                "question": "In your own words, explain the main concept taught in this segment and when to use it.",
-                "options": None,
-                "correct_answer": "A strong answer should state the core concept from the segment and a correct usage context.",
-                "explanation": "This checks real understanding rather than memorization.",
-                "source_segment": chunk.text,
-                "difficulty": "medium",
-                "bloom_level": "understand",
-            }
-        )
+        elif q_type == "true_false":
+            questions.append(
+                {
+                    "question_id": f"q{index}",
+                    "type": "true_false",
+                    "question": f"True or False: The video segment discusses the following concept — '{excerpt}...'",
+                    "options": ["True", "False"],
+                    "correct_answer": "True",
+                    "explanation": "This statement is directly supported by the video transcript content.",
+                    "source_segment": chunk.text,
+                    "difficulty": difficulty,
+                    "bloom_level": "remember",
+                }
+            )
+        elif q_type == "fill_blank":
+            # Extract a key phrase from the excerpt for the blank
+            words = excerpt.split()
+            if len(words) > 6:
+                key_word = words[len(words) // 2]
+                blanked = excerpt.replace(key_word, "___", 1)
+                questions.append(
+                    {
+                        "question_id": f"q{index}",
+                        "type": "fill_blank",
+                        "question": f"Fill in the blank: '{blanked}...'",
+                        "options": None,
+                        "correct_answer": key_word,
+                        "explanation": f"The missing word is '{key_word}', as stated in the video transcript.",
+                        "source_segment": chunk.text,
+                        "difficulty": difficulty,
+                        "bloom_level": "remember",
+                    }
+                )
+            else:
+                questions.append(
+                    {
+                        "question_id": f"q{index}",
+                        "type": "short_answer",
+                        "question": f"Explain the main idea from this part of the video: '{excerpt}...'",
+                        "options": None,
+                        "correct_answer": "A strong answer should state the core concept from the segment and a correct usage context.",
+                        "explanation": "This checks understanding of the video content.",
+                        "source_segment": chunk.text,
+                        "difficulty": difficulty,
+                        "bloom_level": "understand",
+                    }
+                )
+        else:  # short_answer
+            questions.append(
+                {
+                    "question_id": f"q{index}",
+                    "type": "short_answer",
+                    "question": f"In your own words, explain what is being discussed in this part of the video: '{excerpt}...'",
+                    "options": None,
+                    "correct_answer": "A strong answer should state the core concept and demonstrate understanding of the video content.",
+                    "explanation": "This checks real understanding of the lesson.",
+                    "source_segment": chunk.text,
+                    "difficulty": difficulty,
+                    "bloom_level": "understand",
+                }
+            )
 
     return questions
 
@@ -443,7 +510,7 @@ def generate_quiz(
                 return _fallback_quiz_questions(
                     transcript=transcript,
                     include_coding=include_coding,
-                    count=min(2, planned_count),
+                    count=planned_count,
                 )
             break
 
@@ -451,7 +518,7 @@ def generate_quiz(
         return _fallback_quiz_questions(
             transcript=transcript,
             include_coding=include_coding,
-            count=min(2, planned_count),
+            count=planned_count,
         )
 
     return questions

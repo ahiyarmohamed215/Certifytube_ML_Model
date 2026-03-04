@@ -4,9 +4,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.quiz_schemas import GenerateQuizRequest, GenerateQuizResponse, QuizQuestion
 from app.core.logging import get_logger
-from app.transripts import fetch_transcript
 from verification.quiz.generator.quiz_gen import QuizGenerationError, generate_quiz
-from verification.quiz.transcript.processor import process_transcript
+from verification.quiz.transcript.fetcher import fetch_and_process_transcript
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 log = get_logger(__name__)
@@ -15,41 +14,37 @@ log = get_logger(__name__)
 @router.post("/generate", response_model=GenerateQuizResponse)
 def generate_quiz_endpoint(req: GenerateQuizRequest) -> GenerateQuizResponse:
     try:
-        # ---- Resolve transcript ----
-        raw_transcript: str
-        if req.transcript:
-            # Explicit transcript provided — use it directly
-            raw_transcript = req.transcript
-        elif req.video_id:
-            # Fetch transcript by video_id (checks MySQL cache first)
-            raw_transcript = fetch_transcript(req.video_id)
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Either 'video_id' or 'transcript' must be provided.",
-            )
+        # ---- Fetch, validate, process, and cache transcript ----
+        transcript = fetch_and_process_transcript(req.video_id)
 
-        # ---- Process and generate quiz ----
-        transcript = process_transcript(raw_transcript)
-        allow_coding = req.include_coding and transcript.has_code_content
-
+        # ---- Generate quiz (LLM decides question count, max from env) ----
         generated_questions = generate_quiz(
             session_id=req.session_id,
-            video_title=req.video_title,
+            video_title="YouTube Video",
             transcript=transcript,
             video_duration_sec=req.video_duration_sec,
-            requested_questions=req.num_questions,
-            max_questions=req.max_questions,
-            include_coding=allow_coding,
+            include_coding=transcript.has_code_content,
         )
 
-        questions = [QuizQuestion(**question) for question in generated_questions]
+        # ---- Map to response (only fields the backend needs) ----
+        questions = [
+            QuizQuestion(
+                question_id=q["question_id"],
+                type=q["type"],
+                question=q["question"],
+                options=q.get("options"),
+                correct_answer=q["correct_answer"],
+                explanation=q["explanation"],
+                difficulty=q["difficulty"],
+            )
+            for q in generated_questions
+        ]
 
         return GenerateQuizResponse(
             session_id=req.session_id,
+            video_id=req.video_id,
             questions=questions,
             total_questions=len(questions),
-            has_coding_questions=any(question.type == "coding" for question in questions),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

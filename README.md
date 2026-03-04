@@ -50,7 +50,6 @@ Only learners who pass **both** layers receive a certificate.
 certifytube_ml_model/
 ├── app/
 │   ├── main.py                          # FastAPI application entry point
-│   ├── transripts.py                    # YouTube transcript fetcher + MySQL cache
 │   ├── api/
 │   │   ├── engagement_routes.py         # Engagement analysis endpoints
 │   │   ├── engagement_schemas.py        # Request/response models
@@ -58,7 +57,7 @@ certifytube_ml_model/
 │   │   └── quiz_schemas.py             # Quiz request/response models
 │   └── core/
 │       ├── settings.py                  # Environment configuration
-│       ├── database.py                  # MySQL connection pool
+│       ├── database.py                  # MySQL connection pool + transcript cache
 │       └── logging.py                   # Logging setup
 ├── verification/
 │   ├── engagement/
@@ -76,10 +75,12 @@ certifytube_ml_model/
 │   │       ├── inference/predict.py     # EBM prediction pipeline
 │   │       └── explain/ebm_explain.py   # Native glass-box explanations
 │   └── quiz/
+│       ├── transcript/
+│       │   ├── fetcher.py               # YouTube transcript fetch + validate + cache
+│       │   └── processor.py             # Transcript cleaning and chunking
 │       ├── generator/
 │       │   ├── quiz_gen.py              # LLM-powered quiz generation
 │       │   └── prompts.py               # Prompt templates
-│       ├── transcript/processor.py      # Transcript cleaning and chunking
 │       └── validator/groundedness.py    # Quiz groundedness validation
 ├── tests/                               # Unit tests
 ├── data/                                # Training data
@@ -182,11 +183,17 @@ Backend sends video_id    →    POST /quiz/generate
                                     │
                                     ▼
                               ML service:
-                              1. Checks MySQL transcript cache
-                              2. Fetches from YouTube if not cached
-                              3. Saves transcript to MySQL
-                              4. LLM generates grounded questions
-                              5. Returns quiz with answers
+                              1. Checks MySQL for cached processed transcript
+                              2. If not cached, checks for raw transcript cache
+                              3. If no cache, fetches from YouTube API
+                              4. Validates raw transcript (length, emptiness)
+                              5. Saves raw transcript to MySQL
+                              6. Processes: cleans filler words, timestamps,
+                                 chunks into segments
+                              7. Saves processed transcript to MySQL
+                              8. Sends processed text to LLM
+                              9. LLM generates grounded quiz questions
+                              10. Returns quiz with answers + explanations
 ```
 
 Quiz question types: **MCQ**, **True/False**, **Fill-in-the-Blank**, **Short Answer**, **Coding**

@@ -385,7 +385,7 @@ Same request body as XGBoost — identical JSON structure.
 
 ## 6. Quiz Endpoint (Video ID → Questions)
 
-The ML service fetches the YouTube transcript automatically from the `video_id`. Transcripts are **cached in MySQL** inside the ML service — the first request fetches from YouTube, subsequent requests use the cached version.
+The ML service fetches the YouTube transcript automatically from the `video_id`. Transcripts are **cached in MySQL** inside the ML service — the first request fetches from YouTube, validates, processes (cleans filler words, timestamps, etc.), caches both raw and processed versions, then sends the processed text to the LLM for quiz generation. Subsequent requests use the cached processed version.
 
 ### Request
 
@@ -394,39 +394,35 @@ POST /quiz/generate
 Content-Type: application/json
 ```
 
-**Option A — Using video_id (recommended):**
+**Minimal request (recommended):**
 
 ```json
 {
   "session_id": "quiz-session-001",
   "video_id": "rfscVS0vtbw",
-  "video_title": "Python Tutorial for Beginners",
-  "video_duration_sec": 14400,
-  "num_questions": 5,
-  "include_coding": false
+  "video_duration_sec": 14400
 }
 ```
 
-**Option B — Using raw transcript (fallback):**
+**With optional overrides:**
 
 ```json
 {
   "session_id": "quiz-session-001",
-  "transcript": "Gradient descent updates model weights by moving opposite to the gradient. The learning rate controls step size.",
-  "video_title": "Gradient Descent Basics",
-  "video_duration_sec": 780,
-  "num_questions": 4,
-  "include_coding": false
+  "video_id": "rfscVS0vtbw",
+  "video_duration_sec": 14400,
+  "video_title": "Python Tutorial for Beginners",
+  "num_questions": 5,
+  "include_coding": true
 }
 ```
-
-> **Note:** If both `video_id` and `transcript` are provided, `transcript` takes priority. At least one must be provided.
 
 ### Response (200 OK)
 
 ```json
 {
   "session_id": "quiz-session-001",
+  "video_id": "rfscVS0vtbw",
   "questions": [
     {
       "question_id": "q1",
@@ -440,35 +436,29 @@ Content-Type: application/json
       ],
       "correct_answer": "The step size of each update",
       "explanation": "The transcript states that learning rate controls step size.",
-      "source_segment": "Gradient descent updates model weights by moving opposite to the gradient. The learning rate controls step size.",
-      "difficulty": "easy",
-      "bloom_level": "understand"
+      "difficulty": "easy"
     }
   ],
-  "total_questions": 1,
-  "has_coding_questions": false
+  "total_questions": 1
 }
 ```
 
-### Quiz Request Rules
+### Quiz Request Fields
 
-| Field | Type | Rules |
-|------|------|------|
-| `session_id` | string | Required |
-| `video_id` | string | Optional — YouTube video ID or full URL. ML service fetches transcript automatically |
-| `transcript` | string | Optional — raw transcript text (min length 20). Takes priority over `video_id` |
-| `video_title` | string | Required, min length 2 |
-| `video_duration_sec` | float | Required, must be > 0 |
-| `num_questions` | int | Optional, 1 to 20. If omitted, LLM decides count from transcript length |
-| `max_questions` | int | Optional, 1 to 20 (default 20). Upper bound cap |
-| `include_coding` | bool | If `true`, coding questions are allowed when code-like transcript content is detected |
-
-> **Important:** Either `video_id` or `transcript` must be provided. Sending neither returns `422`.
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `session_id` | string | **Yes** | — | Your unique session identifier |
+| `video_id` | string | **Yes** | — | YouTube video ID or full URL |
+| `video_duration_sec` | float | **Yes** | — | Video duration in seconds, must be > 0 |
+| `video_title` | string | No | `"YouTube Video"` | Video title for quiz prompt context |
+| `num_questions` | int | No | Auto (LLM decides) | Manual override, 1–20 |
+| `max_questions` | int | No | `20` | Upper bound cap, 1–20 |
+| `include_coding` | bool | No | `false` | Allow coding questions when code content is detected |
 
 ### Quiz Error Notes
 
-- `400`: invalid video_id / transcript too short / validation issues
-- `422`: neither `video_id` nor `transcript` provided
+- `400`: invalid video_id / transcript too short or empty
+- `422`: missing required fields (`session_id`, `video_id`, `video_duration_sec`)
 - `502`: upstream LLM/provider issue (retryable)
 - `500`: internal processing error
 
@@ -480,12 +470,27 @@ The ML service maintains a MySQL `transcripts` table:
 CREATE TABLE transcripts (
     video_id VARCHAR(20) PRIMARY KEY,
     transcript LONGTEXT NOT NULL,
+    processed_transcript LONGTEXT,
     fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-- **First request** for a video_id: fetches from YouTube API, saves to MySQL, generates quiz
-- **Subsequent requests** for the same video_id: reads from MySQL cache (fast), generates quiz
+| Column | Description |
+|--------|-------------|
+| `transcript` | Raw transcript text fetched from YouTube |
+| `processed_transcript` | Cleaned and processed text (filler words, timestamps, bracketed cues removed) — this is what gets sent to the LLM |
+
+The ML service pipeline when `video_id` is provided:
+
+1. **Check processed cache** — if `processed_transcript` exists in MySQL → process directly, skip YouTube
+2. **Check raw cache** — if `transcript` exists but no processed version → process from raw cache
+3. **Fetch from YouTube** — if no cache at all → fetch via YouTube Transcript API
+4. **Validate** — ensure transcript is non-empty and at least 20 characters
+5. **Save raw** — cache the raw transcript in MySQL
+6. **Process** — clean filler words, remove timestamps/cues, chunk into segments
+7. **Save processed** — cache the processed text in MySQL
+8. **Generate quiz** — send processed chunks to LLM for grounded quiz generation
+
 - Your backend does **NOT** need to manage transcripts — the ML service handles this entirely
 
 ---
@@ -832,17 +837,13 @@ public class MlQuizClient {
     private static final String ML_BASE_URL = "http://ml-server:8000";
 
     public QuizResponse generateQuiz(String sessionId, String videoId,
-                                     String videoTitle, double videoDurationSec,
-                                     int numQuestions) {
+                                     double videoDurationSec) {
         String url = ML_BASE_URL + "/quiz/generate";
 
         Map<String, Object> body = new HashMap<>();
         body.put("session_id", sessionId);
-        body.put("video_id", videoId);           // ML service fetches transcript
-        body.put("video_title", videoTitle);
+        body.put("video_id", videoId);
         body.put("video_duration_sec", videoDurationSec);
-        body.put("num_questions", numQuestions);
-        body.put("include_coding", false);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -861,9 +862,9 @@ public class MlQuizClient {
 ```java
 public record QuizResponse(
     String sessionId,
+    String videoId,
     List<QuizQuestion> questions,
-    int totalQuestions,
-    boolean hasCodingQuestions
+    int totalQuestions
 ) {}
 
 public record QuizQuestion(
@@ -873,9 +874,7 @@ public record QuizQuestion(
     List<String> options,  // null for non-MCQ types
     String correctAnswer,
     String explanation,
-    String sourceSegment,
-    String difficulty,     // "easy", "medium", "hard"
-    String bloomLevel      // "remember", "understand", "apply", "analyze"
+    String difficulty      // "easy", "medium", "hard"
 ) {}
 ```
 
