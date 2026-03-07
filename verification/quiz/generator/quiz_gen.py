@@ -12,11 +12,9 @@ import httpx
 
 from app.core.settings import settings
 from verification.quiz.generator.prompts import (
-    CODING_PROMPT,
     FILL_BLANK_PROMPT,
     MCQ_PROMPT,
     PLAN_QUIZ_PROMPT,
-    SHORT_ANSWER_PROMPT,
     SYSTEM_PROMPT,
     TRUE_FALSE_PROMPT,
 )
@@ -25,14 +23,12 @@ from verification.quiz.validator.groundedness import validate_question_grounded
 
 log = logging.getLogger(__name__)
 
-QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "coding"]
+QuestionType = Literal["mcq", "true_false", "fill_blank"]
 
 PROMPT_MAP = {
     "mcq": MCQ_PROMPT,
     "true_false": TRUE_FALSE_PROMPT,
     "fill_blank": FILL_BLANK_PROMPT,
-    "short_answer": SHORT_ANSWER_PROMPT,
-    "coding": CODING_PROMPT,
 }
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 VALID_BLOOM = {"remember", "understand", "apply", "analyze"}
@@ -129,9 +125,7 @@ def _call_openrouter(prompt: str, request_timeout_seconds: float | None = None) 
 
 
 def _question_types(count: int, include_coding: bool) -> List[QuestionType]:
-    base: List[QuestionType] = ["mcq", "true_false", "fill_blank", "short_answer"]
-    if include_coding:
-        base.append("coding")
+    base: List[QuestionType] = ["mcq", "true_false", "fill_blank"]
     iterator = cycle(base)
     return [next(iterator) for _ in range(count)]
 
@@ -189,7 +183,6 @@ def _plan_question_count(
     prompt = PLAN_QUIZ_PROMPT.format(
         video_title=video_title,
         video_duration_sec=round(video_duration_sec, 2),
-        include_coding=str(include_coding).lower(),
         max_questions=max_questions,
         transcript_excerpt=transcript_excerpt,
     )
@@ -213,8 +206,6 @@ def _default_bloom(question_type: QuestionType) -> str:
         "mcq": "understand",
         "true_false": "understand",
         "fill_blank": "remember",
-        "short_answer": "analyze",
-        "coding": "apply",
     }
     return mapping[question_type]
 
@@ -242,25 +233,12 @@ def _sanitize_question(
         normalized_bloom = bloom_level
 
     options_value = raw.get("options")
-    options: List[str] | None
-    if question_type == "mcq":
-        if not isinstance(options_value, list):
-            raise QuizGenerationError("MCQ must provide 4 options.")
-        options = [str(v).strip() for v in options_value if str(v).strip()]
-        options = list(dict.fromkeys(options))
-        if len(options) != 4 or correct_answer not in options:
-            raise QuizGenerationError("MCQ options must be 4 unique values including correct_answer.")
-    elif question_type == "true_false":
-        value = correct_answer.lower()
-        if value in {"true", "t"}:
-            correct_answer = "True"
-        elif value in {"false", "f"}:
-            correct_answer = "False"
-        else:
-            raise QuizGenerationError("True/False correct_answer must be 'True' or 'False'.")
-        options = ["True", "False"]
-    else:
-        options = None
+    if not isinstance(options_value, list):
+        raise QuizGenerationError(f"{question_type} must provide 4 options.")
+    options = [str(v).strip() for v in options_value if str(v).strip()]
+    options = list(dict.fromkeys(options))
+    if len(options) != 4 or correct_answer not in options:
+        raise QuizGenerationError(f"{question_type} options must be 4 unique values including correct_answer.")
 
     return {
         "question_id": question_id,
@@ -344,8 +322,7 @@ def _fallback_quiz_questions(
     questions: List[Dict[str, object]] = []
     safe_count = max(4, count)  # Always generate at least 4
 
-    # Cycle through all question types for variety
-    type_cycle = cycle(["mcq", "true_false", "fill_blank", "short_answer"])
+    type_cycle = cycle(["mcq", "true_false", "fill_blank"])
     difficulty_cycle = cycle(["easy", "medium", "hard"])
 
     for index in range(1, safe_count + 1):
@@ -379,60 +356,40 @@ def _fallback_quiz_questions(
                 {
                     "question_id": f"q{index}",
                     "type": "true_false",
-                    "question": f"True or False: The video segment discusses the following concept — '{excerpt}...'",
-                    "options": ["True", "False"],
-                    "correct_answer": "True",
-                    "explanation": "This statement is directly supported by the video transcript content.",
-                    "source_segment": chunk.text,
-                    "difficulty": difficulty,
-                    "bloom_level": "remember",
-                }
-            )
-        elif q_type == "fill_blank":
-            # Extract a key phrase from the excerpt for the blank
-            words = excerpt.split()
-            if len(words) > 6:
-                key_word = words[len(words) // 2]
-                blanked = excerpt.replace(key_word, "___", 1)
-                questions.append(
-                    {
-                        "question_id": f"q{index}",
-                        "type": "fill_blank",
-                        "question": f"Fill in the blank: '{blanked}...'",
-                        "options": None,
-                        "correct_answer": key_word,
-                        "explanation": f"The missing word is '{key_word}', as stated in the video transcript.",
-                        "source_segment": chunk.text,
-                        "difficulty": difficulty,
-                        "bloom_level": "remember",
-                    }
-                )
-            else:
-                questions.append(
-                    {
-                        "question_id": f"q{index}",
-                        "type": "short_answer",
-                        "question": f"Explain the main idea from this part of the video: '{excerpt}...'",
-                        "options": None,
-                        "correct_answer": "A strong answer should state the core concept from the segment and a correct usage context.",
-                        "explanation": "This checks understanding of the video content.",
-                        "source_segment": chunk.text,
-                        "difficulty": difficulty,
-                        "bloom_level": "understand",
-                    }
-                )
-        else:  # short_answer
-            questions.append(
-                {
-                    "question_id": f"q{index}",
-                    "type": "short_answer",
-                    "question": f"In your own words, explain what is being discussed in this part of the video: '{excerpt}...'",
-                    "options": None,
-                    "correct_answer": "A strong answer should state the core concept and demonstrate understanding of the video content.",
-                    "explanation": "This checks real understanding of the lesson.",
+                    "question": f"Which of the following evaluations of this concept from the video is true? — '{excerpt}...'",
+                    "options": [
+                        "The concept is true as stated in the excerpt",
+                        "The concept is false, but closely related to a true fact",
+                        "The concept only applies in entirely different scenarios",
+                        "The concept is a common misconception directly refuted by the source",
+                    ],
+                    "correct_answer": "The concept is true as stated in the excerpt",
+                    "explanation": "This statement evaluates the truthfulness of the transcript content.",
                     "source_segment": chunk.text,
                     "difficulty": difficulty,
                     "bloom_level": "understand",
+                }
+            )
+        elif q_type == "fill_blank":
+            words = excerpt.split()
+            key_word = words[len(words) // 2] if len(words) > 6 else "concept"
+            blanked = excerpt.replace(key_word, "___", 1) if key_word != "concept" else f"{excerpt} ... ___"
+            questions.append(
+                {
+                    "question_id": f"q{index}",
+                    "type": "fill_blank",
+                    "question": f"Fill in the blank: '{blanked}'",
+                    "options": [
+                        key_word,
+                        "Idea",
+                        "Theory",
+                        "Explanation",
+                    ],
+                    "correct_answer": key_word,
+                    "explanation": f"The missing word is '{key_word}', as stated in the video transcript.",
+                    "source_segment": chunk.text,
+                    "difficulty": difficulty,
+                    "bloom_level": "remember",
                 }
             )
 

@@ -7,7 +7,6 @@ Return valid JSON only. No markdown, no prose outside JSON.
 PLAN_QUIZ_PROMPT = """
 Video title: {video_title}
 Video duration (seconds): {video_duration_sec}
-Allow coding questions: {include_coding}
 Maximum allowed questions: {max_questions}
 Transcript excerpt:
 {transcript_excerpt}
@@ -46,11 +45,12 @@ Bloom level: {bloom_level}
 Transcript segment:
 {source_segment}
 
-Generate one true/false misconception check.
+Generate one True/False misconception check, but formatted as a 4-option multiple choice question.
 Rules:
-- Provide statement in "question"
-- options must be ["True", "False"]
-- correct_answer must be either "True" or "False"
+- 4 options exactly
+- 1 correct option, 3 plausible distractors
+- Ask the question such that the user has to evaluate the truthfulness of a statement or concept (e.g. "Which of the following statements about X is true?" or "Why is statement Y false?")
+- The options should be distinct sentences.
 
 Return JSON with keys:
 type, question, options, correct_answer, explanation, source_segment, difficulty, bloom_level
@@ -67,49 +67,11 @@ Transcript segment:
 
 Generate one fill-in-the-blank question for a key concept.
 Rules:
-- Use exactly one blank represented as "___"
-- No options list
+- Use exactly one blank represented as "___" in the question text.
+- Provide 4 options exactly (4 potential words/phrases that could fit the blank).
+- 1 correct option, 3 plausible distractors.
 
 Return JSON with keys:
-type, question, correct_answer, explanation, source_segment, difficulty, bloom_level
+type, question, options, correct_answer, explanation, source_segment, difficulty, bloom_level
 Set type="fill_blank".
-"""
-
-
-SHORT_ANSWER_PROMPT = """
-Video title: {video_title}
-Difficulty: {difficulty}
-Bloom level: {bloom_level}
-Transcript segment:
-{source_segment}
-
-Generate one short-answer question that checks deeper understanding.
-Rules:
-- No options list
-- correct_answer should be concise but complete
-- explanation should justify the expected answer using transcript concepts
-
-Return JSON with keys:
-type, question, correct_answer, explanation, source_segment, difficulty, bloom_level
-Set type="short_answer".
-"""
-
-
-CODING_PROMPT = """
-Video title: {video_title}
-Difficulty: {difficulty}
-Bloom level: {bloom_level}
-Transcript segment:
-{source_segment}
-
-Generate one practical coding question from this content.
-Rules:
-- Ask for a short coding task (not a long project)
-- No options list
-- correct_answer should include an expected solution approach or snippet
-- explanation should explain why that solution is correct
-
-Return JSON with keys:
-type, question, correct_answer, explanation, source_segment, difficulty, bloom_level
-Set type="coding".
 """

@@ -4,7 +4,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-QuestionType = Literal["mcq", "true_false", "fill_blank", "short_answer", "coding"]
+QuestionType = Literal["mcq", "true_false", "fill_blank"]
 DifficultyLevel = Literal["easy", "medium", "hard"]
 
 

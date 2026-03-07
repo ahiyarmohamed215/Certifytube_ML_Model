@@ -394,26 +394,13 @@ POST /quiz/generate
 Content-Type: application/json
 ```
 
-**Minimal request (recommended):**
+**Example request:**
 
 ```json
 {
   "session_id": "quiz-session-001",
   "video_id": "rfscVS0vtbw",
   "video_duration_sec": 14400
-}
-```
-
-**With optional overrides:**
-
-```json
-{
-  "session_id": "quiz-session-001",
-  "video_id": "rfscVS0vtbw",
-  "video_duration_sec": 14400,
-  "video_title": "Python Tutorial for Beginners",
-  "num_questions": 5,
-  "include_coding": true
 }
 ```
 
@@ -450,10 +437,6 @@ Content-Type: application/json
 | `session_id` | string | **Yes** | — | Your unique session identifier |
 | `video_id` | string | **Yes** | — | YouTube video ID or full URL |
 | `video_duration_sec` | float | **Yes** | — | Video duration in seconds, must be > 0 |
-| `video_title` | string | No | `"YouTube Video"` | Video title for quiz prompt context |
-| `num_questions` | int | No | Auto (LLM decides) | Manual override, 1–20 |
-| `max_questions` | int | No | `20` | Upper bound cap, 1–20 |
-| `include_coding` | bool | No | `false` | Allow coding questions when code content is detected |
 
 ### Quiz Error Notes
 
@@ -893,7 +876,6 @@ public double gradeQuiz(List<QuizQuestion> questions, Map<String, String> learne
     return (double) correct / questions.size();
 }
 ```
-
 ---
 
 ## 11. Which Model Should I Call?
