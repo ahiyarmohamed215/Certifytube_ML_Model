@@ -241,19 +241,22 @@ Content-Type: application/json
       "feature": "watch_time_ratio",
       "shap_value": 0.45,
       "feature_value": 0.837,
-      "behavior_category": "coverage"
+      "behavior_category": "coverage",
+      "reason": "Strong watch coverage increased engagement likelihood."
     },
     {
       "feature": "completion_ratio",
       "shap_value": 0.32,
       "feature_value": 0.655,
-      "behavior_category": "coverage"
+      "behavior_category": "coverage",
+      "reason": "Higher completion suggests the learner stayed through most of the lesson."
     },
     {
       "feature": "attention_index",
       "shap_value": 0.15,
       "feature_value": 0.556,
-      "behavior_category": "attention_consistency"
+      "behavior_category": "attention_consistency",
+      "reason": "Steady attention pattern positively influenced the score."
     }
   ],
   "shap_top_negative": [
@@ -261,13 +264,15 @@ Content-Type: application/json
       "feature": "num_buffering_events",
       "shap_value": -0.03,
       "feature_value": 3.0,
-      "behavior_category": "playback_quality"
+      "behavior_category": "playback_quality",
+      "reason": "Frequent buffering slightly reduced observed engagement."
     },
     {
       "feature": "skip_time_ratio",
       "shap_value": -0.01,
       "feature_value": 0.135,
-      "behavior_category": "skipping"
+      "behavior_category": "skipping",
+      "reason": "Some skipping behavior pulled the score down."
     }
   ]
 }
@@ -300,19 +305,22 @@ Same request body as XGBoost — identical JSON structure.
       "feature": "watch_time_ratio",
       "contribution": 1.87,
       "feature_value": 0.837,
-      "behavior_category": "coverage"
+      "behavior_category": "coverage",
+      "reason": "Strong watch coverage increased engagement likelihood."
     },
     {
       "feature": "completion_ratio",
       "contribution": 1.23,
       "feature_value": 0.655,
-      "behavior_category": "coverage"
+      "behavior_category": "coverage",
+      "reason": "Higher completion suggests the learner stayed through most of the lesson."
     },
     {
       "feature": "attention_index",
       "contribution": 0.45,
       "feature_value": 0.556,
-      "behavior_category": "attention_consistency"
+      "behavior_category": "attention_consistency",
+      "reason": "Steady attention pattern positively influenced the score."
     }
   ],
   "ebm_top_negative": [
@@ -320,13 +328,15 @@ Same request body as XGBoost — identical JSON structure.
       "feature": "num_buffering_events",
       "contribution": -0.12,
       "feature_value": 3.0,
-      "behavior_category": "playback_quality"
+      "behavior_category": "playback_quality",
+      "reason": "Frequent buffering slightly reduced observed engagement."
     },
     {
       "feature": "skip_time_ratio",
       "contribution": -0.05,
       "feature_value": 0.135,
-      "behavior_category": "skipping"
+      "behavior_category": "skipping",
+      "reason": "Some skipping behavior pulled the score down."
     }
   ]
 }
@@ -361,6 +371,7 @@ Same request body as XGBoost — identical JSON structure.
 | `shap_value` | float | SHAP value (positive = toward engagement) |
 | `feature_value` | float | The raw value sent for this feature |
 | `behavior_category` | string | Behavioral category (see category list below) |
+| `reason` | string | Human-readable reason for this feature's impact |
 
 ### EBM-Only Fields
 
@@ -377,9 +388,10 @@ Same request body as XGBoost — identical JSON structure.
 | `contribution` | float | EBM term score (positive = toward engagement) |
 | `feature_value` | float | The raw value sent for this feature |
 | `behavior_category` | string | Behavioral category (see category list below) |
+| `reason` | string | Human-readable reason for this feature's impact |
 
 
-> **Note:** The ML service returns only the raw `engagement_score` and `explanation`. The ENGAGED / NOT_ENGAGED decision and threshold comparison should be handled by your backend.
+> **Note:** The ML service returns `engagement_score`, `explanation`, and top contributor arrays. The ENGAGED / NOT_ENGAGED decision and threshold comparison should be handled by your backend.
 
 ---
 
@@ -506,7 +518,7 @@ The ML service pipeline when `video_id` is provided:
 **Invalid feature_version:**
 ```json
 {
-  "detail": "Unknown feature contract version: v2.0"
+  "detail": "Unsupported feature_version 'v2.0'. Expected 'v1.0'."
 }
 ```
 
@@ -852,9 +864,9 @@ public record QuizResponse(
 
 public record QuizQuestion(
     String questionId,
-    String type,           // "mcq", "true_false", "fill_blank", "short_answer", "coding"
+    String type,           // "mcq", "true_false", "fill_blank"
     String question,
-    List<String> options,  // null for non-MCQ types
+    List<String> options,  // optional; typically 4 options in current responses
     String correctAnswer,
     String explanation,
     String difficulty      // "easy", "medium", "hard"

@@ -3,7 +3,7 @@ from verification.quiz.generator.quiz_gen import _question_types, _sanitize_ques
 
 def test_question_type_distribution_without_coding():
     question_types = _question_types(6, include_coding=False)
-    assert question_types == ["mcq", "true_false", "fill_blank", "short_answer", "mcq", "true_false"]
+    assert question_types == ["mcq", "true_false", "fill_blank", "mcq", "true_false", "fill_blank"]
 
 
 def test_question_type_distribution_with_coding():
@@ -12,10 +12,10 @@ def test_question_type_distribution_with_coding():
         "mcq",
         "true_false",
         "fill_blank",
-        "short_answer",
-        "coding",
         "mcq",
         "true_false",
+        "fill_blank",
+        "mcq",
     ]
 
 

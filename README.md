@@ -196,7 +196,7 @@ Backend sends video_id    →    POST /quiz/generate
                               10. Returns quiz with answers + explanations
 ```
 
-Quiz question types: **MCQ**, **True/False**, **Fill-in-the-Blank**, **Short Answer**, **Coding**
+Quiz question types (current API): **MCQ**, **True/False**, **Fill-in-the-Blank**
 
 Each question includes: difficulty level, Bloom's taxonomy level, source segment from transcript, correct answer, and explanation.
 
