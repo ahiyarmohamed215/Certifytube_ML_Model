@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-import numpy as np
 import shap
 import xgboost as xgb
 
-from verification.engagement.xgboost.inference.load import load_model, load_feature_columns
+from verification.engagement.common.preprocessing import prepare_feature_array
+from verification.engagement.xgboost.inference.load import (
+    load_model,
+    load_feature_columns,
+    load_preprocessing,
+)
 
 _explainer = None
 
@@ -22,9 +26,9 @@ def _get_explainer():
 def compute_local_shap(features: Dict[str, float]) -> List[Dict[str, float]]:
     feature_columns = load_feature_columns()
     explainer = _get_explainer()
+    preprocessing = load_preprocessing()
 
-    # Default missing features to 0.0 rather than crash
-    x = np.array([[float(features.get(col, 0.0)) for col in feature_columns]], dtype=float)
+    x = prepare_feature_array(features, preprocessing)
     dmat = xgb.DMatrix(x, feature_names=feature_columns)
 
     shap_vals = explainer.shap_values(dmat)

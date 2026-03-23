@@ -38,22 +38,5 @@ class Settings(BaseSettings):
     db_password: str = Field(default="", alias="DB_PASSWORD")
     db_name: str = Field(default="certifytube", alias="DB_NAME")
 
-    # Transcript fetching
-    transcript_proxy_mode: str = Field(default="none", alias="TRANSCRIPT_PROXY_MODE")
-    transcript_proxy_http_url: str = Field(default="", alias="TRANSCRIPT_PROXY_HTTP_URL")
-    transcript_proxy_https_url: str = Field(default="", alias="TRANSCRIPT_PROXY_HTTPS_URL")
-    transcript_webshare_proxy_username: str = Field(
-        default="",
-        alias="TRANSCRIPT_WEBSHARE_PROXY_USERNAME",
-    )
-    transcript_webshare_proxy_password: str = Field(
-        default="",
-        alias="TRANSCRIPT_WEBSHARE_PROXY_PASSWORD",
-    )
-    transcript_webshare_proxy_locations: str = Field(
-        default="",
-        alias="TRANSCRIPT_WEBSHARE_PROXY_LOCATIONS",
-    )
-
 
 settings = Settings()

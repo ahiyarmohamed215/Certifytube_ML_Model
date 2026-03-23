@@ -3,9 +3,9 @@ predict_ebm.py – EBM inference (scikit-learn interface, no DMatrix).
 """
 from __future__ import annotations
 
-import numpy as np
-
+from verification.engagement.common.preprocessing import prepare_feature_array
 from verification.engagement.ebm.inference.load import load_ebm_model, load_ebm_feature_columns
+from verification.engagement.ebm.inference.load import load_ebm_preprocessing
 from verification.engagement.common.validate import validate_features
 
 
@@ -19,10 +19,11 @@ def predict_engagement_ebm(features: dict) -> dict:
     """
     ebm = load_ebm_model()
     feature_columns = load_ebm_feature_columns()
+    preprocessing = load_ebm_preprocessing()
 
     validate_features(features, feature_columns)
 
-    x = np.array([[features[col] for col in feature_columns]], dtype=float)
+    x = prepare_feature_array(features, preprocessing)
 
     score = float(ebm.predict_proba(x)[0, 1])
 

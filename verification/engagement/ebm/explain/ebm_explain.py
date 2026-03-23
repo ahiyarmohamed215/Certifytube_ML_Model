@@ -18,9 +18,12 @@ from __future__ import annotations
 import logging
 from typing import Dict, List, Tuple
 
-import numpy as np
-
-from verification.engagement.ebm.inference.load import load_ebm_model, load_ebm_feature_columns
+from verification.engagement.common.preprocessing import prepare_feature_array
+from verification.engagement.ebm.inference.load import (
+    load_ebm_feature_columns,
+    load_ebm_model,
+    load_ebm_preprocessing,
+)
 
 log = logging.getLogger(__name__)
 
@@ -68,11 +71,9 @@ def compute_local_ebm(features: Dict[str, float]) -> List[Dict[str, float]]:
     """
     ebm = load_ebm_model()
     feature_columns = load_ebm_feature_columns()
+    preprocessing = load_ebm_preprocessing()
 
-    x = np.array(
-        [[float(features.get(col, 0.0)) for col in feature_columns]],
-        dtype=float,
-    )
+    x = prepare_feature_array(features, preprocessing)
 
     # --- Extract local explanation -----------------------------------------
     local_explanation = ebm.explain_local(x)
@@ -147,10 +148,10 @@ def compute_local_ebm(features: Dict[str, float]) -> List[Dict[str, float]]:
 
     # --- Build output (same shape as shap_explain) -------------------------
     out: List[Dict[str, float]] = []
-    for col in feature_columns:
+    for idx, col in enumerate(feature_columns):
         out.append({
             "feature": col,
-            "value": float(features.get(col, 0.0)),
+            "value": float(x[0, idx]),
             "shap": float(contribution_map.get(col, 0.0)),
         })
 

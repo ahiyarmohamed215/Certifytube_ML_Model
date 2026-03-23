@@ -1,254 +1,294 @@
-<p align="center">
-  <h1 align="center">CertifyTube</h1>
-  <p align="center">
-    Dual-verification machine learning service for certifying youtube informal learning engagement.
-    <br />
-    <strong>Layer 1:</strong> Engagement Scoring &nbsp;·&nbsp;
-    <strong>Layer 2:</strong> Quiz Verification
-  </p>
-</p>
+# CertifyTube ML Backend
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.13-blue?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/XGBoost-2.1-orange?logo=xgboost" alt="XGBoost">
-  <img src="https://img.shields.io/badge/EBM-InterpretML-purple" alt="EBM">
-  <img src="https://img.shields.io/badge/LLM-DeepSeek%20R1-green" alt="DeepSeek">
-  <img src="https://img.shields.io/badge/MySQL-Transcript%20Cache-4479A1?logo=mysql&logoColor=white" alt="MySQL">
-</p>
+Production-style backend service for the machine learning layer of the CertifyTube final year project at IIT.
 
----
+This repository powers two verification stages used before certificate issuance:
 
-## Overview
+1. engagement verification from learner interaction behavior
+2. transcript-grounded quiz generation for content validation
 
-CertifyTube is a dual-verification system that determines whether a learner genuinely engaged with an online video before issuing a certificate. It uses two independent verification layers:
+> Academic project notice: this repository is source-available for review only. It is not open-source software. Copying, reuse, redistribution, or submission as another person's work is not permitted without prior written permission from the author. See [LICENSE](LICENSE).
 
-| Layer | Purpose | How It Works |
-|-------|---------|-------------|
-| **Layer 1 — Engagement Analysis** | Score how actively the learner watched | XGBoost or EBM model analyzes 49 behavioral features (pauses, seeks, speed, coverage, etc.) and returns a score (0–1) with explainable contributor breakdown |
-| **Layer 2 — Quiz Verification** | Verify content comprehension | LLM generates transcript-grounded quiz questions from the YouTube video; the backend grades the learner's answers |
+## What This Service Does
 
-Only learners who pass **both** layers receive a certificate.
+CertifyTube is designed for a larger application stack where a separate backend collects video-session events and calls this ML service for scoring and quiz generation.
 
----
+The service provides:
 
-## API Endpoints
+- FastAPI endpoints for engagement scoring and quiz generation
+- XGBoost inference with SHAP-based local explanations
+- EBM inference with native term-level explanations
+- strict feature-contract validation for engagement payloads
+- transcript retrieval, processing, and MySQL-backed caching
+- LLM-based quiz generation through an OpenRouter-compatible API
+
+## API Summary
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/engagement/analyze/xgboost` | Engagement scoring with SHAP explanations |
-| `POST` | `/engagement/analyze/ebm` | Engagement scoring with EBM native explanations |
-| `POST` | `/quiz/generate` | Generate quiz from YouTube video ID or transcript |
-| `GET` | `/docs` | Interactive Swagger UI |
+| --- | --- | --- |
+| `GET` | `/health` | Service health check |
+| `POST` | `/engagement/analyze/xgboost` | Engagement scoring with XGBoost |
+| `POST` | `/engagement/analyze/ebm` | Engagement scoring with EBM |
+| `POST` | `/quiz/generate` | Transcript-backed quiz generation |
+| `GET` | `/docs` | Swagger UI |
 
----
+## Service Architecture
 
-## Project Structure
+### Engagement Verification
 
+The engagement layer evaluates whether a learner meaningfully interacted with a video using a strict engineered feature contract. The payload is validated before inference, then scored by either:
+
+- XGBoost with SHAP explanations
+- EBM with native explainability
+
+Typical output includes:
+
+- `engagement_score`
+- natural-language explanation
+- top positive contributors
+- top negative contributors
+
+### Quiz Verification
+
+The quiz layer verifies content understanding using transcript-grounded question generation.
+
+The flow is:
+
+1. receive `video_id` and session context
+2. read transcript cache from MySQL when available
+3. fetch transcript when cache is missing
+4. clean and process transcript content
+5. generate quiz questions through the configured LLM provider
+6. return questions, answers, and explanations
+
+## Integration Contract
+
+### Engagement Request Shape
+
+All engagement endpoints use the same request format:
+
+```json
+{
+  "session_id": "session-001",
+  "feature_version": "v1.0",
+  "features": {
+    "session_duration_sec": 322.95,
+    "video_duration_sec": 600.0,
+    "watch_time_sec": 502.01
+  }
+}
 ```
+
+Important contract rules:
+
+- `session_id` is required
+- `feature_version` is required
+- `features` must be numeric
+- the feature payload must match the versioned contract exactly
+- missing or extra keys are rejected with `400`
+
+The exact feature contract is versioned under `verification/engagement/contracts/`.
+
+### Engagement Response Shape
+
+Both engagement models return:
+
+- model identifier
+- `session_id`
+- `feature_version`
+- `engagement_score`
+- explanation text
+- top positive contributors
+- top negative contributors
+
+XGBoost uses SHAP contributor objects. EBM uses native contribution objects.
+
+### Quiz Request Shape
+
+```json
+{
+  "session_id": "session-001",
+  "video_id": "dQw4w9WgXcQ",
+  "video_duration_sec": 600
+}
+```
+
+Quiz responses return:
+
+- `session_id`
+- `video_id`
+- `questions`
+- `total_questions`
+
+Each question includes:
+
+- `question_id`
+- `type`
+- `question`
+- `options` when applicable
+- `correct_answer`
+- `explanation`
+- `difficulty`
+
+## Error Behavior
+
+The service is explicit about request and upstream failures.
+
+### Engagement Endpoints
+
+- `400` invalid feature contract or invalid feature values
+- `500` missing model artifacts or unexpected processing failure
+
+### Quiz Endpoint
+
+- `400` invalid video input
+- `404` transcript genuinely does not exist
+- `503` transcript upstream unavailable or blocked
+- `502` quiz provider failure
+- `500` unexpected internal failure
+
+## Repository Layout
+
+```text
 certifytube_ml_model/
-├── app/
-│   ├── main.py                          # FastAPI application entry point
-│   ├── api/
-│   │   ├── engagement_routes.py         # Engagement analysis endpoints
-│   │   ├── engagement_schemas.py        # Request/response models
-│   │   ├── quiz_routes.py              # Quiz generation endpoint
-│   │   └── quiz_schemas.py             # Quiz request/response models
-│   └── core/
-│       ├── settings.py                  # Environment configuration
-│       ├── database.py                  # MySQL connection pool + transcript cache
-│       └── logging.py                   # Logging setup
-├── verification/
-│   ├── engagement/
-│   │   ├── common/
-│   │   │   ├── behavior_map.py          # Feature → behavior category mapping
-│   │   │   ├── text_explainer.py        # Human-readable explanation generator
-│   │   │   └── validate.py              # Feature validation
-│   │   ├── contracts/                   # Feature contract versioning
-│   │   ├── xgboost/
-│   │   │   ├── artifacts/               # Trained model + scaler + feature list
-│   │   │   ├── inference/predict.py     # XGBoost prediction pipeline
-│   │   │   └── explain/shap_explain.py  # SHAP-based explanations
-│   │   └── ebm/
-│   │       ├── artifacts/               # Trained EBM model
-│   │       ├── inference/predict.py     # EBM prediction pipeline
-│   │       └── explain/ebm_explain.py   # Native glass-box explanations
-│   └── quiz/
-│       ├── transcript/
-│       │   ├── fetcher.py               # YouTube transcript fetch + validate + cache
-│       │   └── processor.py             # Transcript cleaning and chunking
-│       ├── generator/
-│       │   ├── quiz_gen.py              # LLM-powered quiz generation
-│       │   └── prompts.py               # Prompt templates
-│       └── validator/groundedness.py    # Quiz groundedness validation
-├── tests/                               # Unit tests
-├── data/                                # Training data
-├── .env.example                         # Environment template
-├── requirements.txt                     # Python dependencies
-├── BACKEND_INTEGRATION_GUIDE.md         # Full API docs for Spring Boot backend
-└── README.md
+|-- app/
+|   |-- main.py
+|   |-- api/
+|   |   |-- engagement_routes.py
+|   |   |-- engagement_schemas.py
+|   |   |-- quiz_routes.py
+|   |   `-- quiz_schemas.py
+|   `-- core/
+|       |-- database.py
+|       |-- logging.py
+|       `-- settings.py
+|-- verification/
+|   |-- engagement/
+|   |   |-- common/
+|   |   |-- contracts/
+|   |   |-- ebm/
+|   |   `-- xgboost/
+|   `-- quiz/
+|       |-- generator/
+|       |-- transcript/
+|       `-- validator/
+|-- tests/
+|-- data/
+|-- reports/
+|-- .env.example
+|-- LICENSE
+|-- requirements.txt
+`-- README.md
 ```
 
----
+## Technology Stack
 
-## Quick Start
+| Area | Technology |
+| --- | --- |
+| API | FastAPI |
+| Serving | Uvicorn |
+| ML | XGBoost, Explainable Boosting Machine |
+| Explainability | SHAP, native EBM term explanations |
+| Data tooling | pandas, NumPy, scikit-learn |
+| Quiz generation | OpenRouter-compatible LLM API |
+| Transcript source | `youtube-transcript-api` |
+| Cache | MySQL |
+
+## Local Setup
 
 ### Prerequisites
 
-- **Python 3.12+**
-- **MySQL 8.0+** (for transcript caching)
-- **OpenRouter API key** (for LLM-powered quiz generation)
+- Python 3.13 recommended
+- MySQL 8+
+- OpenRouter API key
 
-### 1. Clone & setup
+### Installation
 
 ```bash
-git clone https://github.com/your-username/certifytube_ml_model.git
-cd certifytube_ml_model
-
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
+```
 
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
+Create `.env` from `.env.example`, then start the service:
 
 ```bash
-cp .env.example .env
-# Edit .env with your actual credentials
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. Start the server
+Local URLs:
 
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
 
-Open the interactive API docs at **http://127.0.0.1:8000/docs**
+## Configuration
 
----
+Core environment variables:
 
-## Environment Variables
+| Variable | Purpose |
+| --- | --- |
+| `OPENROUTER_API_KEY` | API key for quiz generation |
+| `QUIZ_MODEL` | LLM model identifier |
+| `OPENROUTER_BASE_URL` | OpenRouter-compatible base URL |
+| `OPENROUTER_SITE_URL` | Site URL sent with OpenRouter headers |
+| `OPENROUTER_APP_NAME` | Application name sent with OpenRouter headers |
+| `LLM_TIMEOUT_SECONDS` | Per-request LLM timeout |
+| `QUIZ_MAX_QUESTIONS` | Max generated questions |
+| `QUIZ_MAX_ATTEMPTS_PER_QUESTION` | Retry limit per question |
+| `QUIZ_GENERATION_TIMEOUT_SECONDS` | Total quiz generation timeout |
+| `DB_HOST` | MySQL host |
+| `DB_PORT` | MySQL port |
+| `DB_USER` | MySQL user |
+| `DB_PASSWORD` | MySQL password |
+| `DB_NAME` | MySQL database name |
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENROUTER_API_KEY` | API key for LLM quiz generation | *(required)* |
-| `QUIZ_MODEL` | LLM model name | `deepseek/deepseek-r1` |
-| `OPENROUTER_BASE_URL` | OpenRouter API base URL | `https://openrouter.ai/api/v1` |
-| `LLM_TIMEOUT_SECONDS` | Timeout per LLM call | `40` |
-| `QUIZ_MAX_QUESTIONS` | Maximum quiz questions | `20` |
-| `QUIZ_GENERATION_TIMEOUT_SECONDS` | Total quiz generation timeout | `300` |
-| `DB_HOST` | MySQL host | `localhost` |
-| `DB_PORT` | MySQL port | `3306` |
-| `DB_USER` | MySQL username | `root` |
-| `DB_PASSWORD` | MySQL password | *(required)* |
-| `DB_NAME` | MySQL database name | `certifytube` |
-| `TRANSCRIPT_PROXY_MODE` | Transcript proxy mode: `none`, `generic`, or `webshare` | `none` |
-| `TRANSCRIPT_PROXY_HTTP_URL` | Generic HTTP proxy URL for transcript fetches | *(empty)* |
-| `TRANSCRIPT_PROXY_HTTPS_URL` | Generic HTTPS proxy URL for transcript fetches | *(empty)* |
-| `TRANSCRIPT_WEBSHARE_PROXY_USERNAME` | Webshare residential proxy username | *(empty)* |
-| `TRANSCRIPT_WEBSHARE_PROXY_PASSWORD` | Webshare residential proxy password | *(empty)* |
-| `TRANSCRIPT_WEBSHARE_PROXY_LOCATIONS` | Optional comma-separated proxy country filters | *(empty)* |
+## Model Artifacts
 
----
-
-## How It Works
-
-### Layer 1 — Engagement Analysis
-
-```
-Backend computes 49 features    →    POST /engagement/analyze/xgboost
-from learner events                  (or /ebm)
-                                          │
-                                          ▼
-                                    ML returns:
-                                    • engagement_score (0–1)
-                                    • explanation (friendly message)
-                                    • top positive/negative contributors
-```
-
-The engagement model analyzes behavioral signals like:
-
-| Category | Features |
-|----------|----------|
-| **Coverage** | watch_time_ratio, completion_ratio, completed_flag |
-| **Attention** | attention_index, engagement_velocity, play_pause_ratio |
-| **Skipping** | skip_time_ratio, num_seek_forward, early_skip_flag |
-| **Rewatching** | rewatch_time_ratio, num_seek_backward, deep_flag |
-| **Pacing** | fast_ratio, slow_ratio, playback_speed_variance |
-| **Pausing** | pause_freq_per_min, avg_pause_duration_sec, long_pause_ratio |
-
-### Layer 2 — Quiz Verification
-
-```
-Backend sends video_id    →    POST /quiz/generate
-                                    │
-                                    ▼
-                              ML service:
-                              1. Checks MySQL for cached processed transcript
-                              2. If not cached, checks for raw transcript cache
-                              3. If no cache, fetches from YouTube API
-                              4. Validates raw transcript (length, emptiness)
-                              5. Saves raw transcript to MySQL
-                              6. Processes: cleans filler words, timestamps,
-                                 chunks into segments
-                              7. Saves processed transcript to MySQL
-                              8. Sends processed text to LLM
-                              9. LLM generates grounded quiz questions
-                              10. Returns quiz with answers + explanations
-```
-
-Quiz question types (current API): **MCQ**, **True/False**, **Fill-in-the-Blank**
-
-Each question includes: difficulty level, Bloom's taxonomy level, source segment from transcript, correct answer, and explanation.
-
----
+- XGBoost artifacts are stored under `verification/engagement/xgboost/artifacts/`
+- EBM artifacts are stored under `verification/engagement/ebm/artifacts/`
+- shared preprocessing and validation utilities are under `verification/engagement/common/`
+- generated reports are stored under `reports/`
 
 ## Testing
 
+Run the test suite with:
+
 ```bash
-# Unit tests
-python -m pytest tests/ -v
-
-# Quick health check
-curl http://localhost:8000/health
-
-# Scripted endpoint tests (PowerShell)
-.\TEST_ENDPOINTS.ps1
+python -m pytest tests -v
 ```
 
----
+## Project Positioning
 
-## Backend Integration
+This repository is intentionally structured like a backend service repository rather than a notebook dump or coursework archive. It contains:
 
-See **[BACKEND_INTEGRATION_GUIDE.md](BACKEND_INTEGRATION_GUIDE.md)** for complete API documentation including:
-
-- Full request/response schemas for all endpoints
-- All 49 feature definitions with computation formulas
-- Java (Spring Boot) code examples and DTOs
-- Database schema recommendations
-- Decision flow diagram
-- Error handling reference
-
----
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|-----------|
-| **API Framework** | FastAPI 0.115 |
-| **Engagement Models** | XGBoost 2.1 + SHAP, InterpretML EBM |
-| **Quiz LLM** | DeepSeek R1 via OpenRouter |
-| **Transcript Source** | YouTube Transcript API |
-| **Transcript Cache** | MySQL 8.0+ |
-| **Explainability** | SHAP (XGBoost), Native term scores (EBM) |
-
----
+- serving code
+- training and evaluation code
+- model artifacts
+- validation logic
+- integration-ready request and response contracts
 
 ## License
 
-This project is part of a Final Year Project (FYP) at IIT.
+This project is protected by a custom academic and proprietary license.
+
+- it is an IIT final year project
+- it is not released under an open-source license
+- copying, redistribution, reuse, or submission as another person's work is prohibited without written permission
+
+See [LICENSE](LICENSE) for the full terms.
