@@ -12,9 +12,7 @@ venv/
 .env/
 
 # ML artifacts
-ml/artifacts/
 reports/
-*.joblib
 *.pkl
 
 # Data
