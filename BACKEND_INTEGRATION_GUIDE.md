@@ -452,7 +452,9 @@ Content-Type: application/json
 
 ### Quiz Error Notes
 
-- `400`: invalid video_id / transcript too short or empty
+- `400`: invalid `video_id` / malformed URL
+- `404`: transcript truly does not exist for the video
+- `503`: transcript upstream blocked/unavailable; retryable, and production should use a proxy-backed fetcher
 - `422`: missing required fields (`session_id`, `video_id`, `video_duration_sec`)
 - `502`: upstream LLM/provider issue (retryable)
 - `500`: internal processing error

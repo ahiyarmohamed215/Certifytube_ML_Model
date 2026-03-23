@@ -5,7 +5,12 @@ from fastapi import APIRouter, HTTPException
 from app.api.quiz_schemas import GenerateQuizRequest, GenerateQuizResponse, QuizQuestion
 from app.core.logging import get_logger
 from verification.quiz.generator.quiz_gen import QuizGenerationError, generate_quiz
-from verification.quiz.transcript.fetcher import fetch_and_process_transcript
+from verification.quiz.transcript.fetcher import (
+    TranscriptBadRequestError,
+    TranscriptNotFoundError,
+    TranscriptUpstreamUnavailableError,
+    fetch_and_process_transcript,
+)
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 log = get_logger(__name__)
@@ -46,8 +51,12 @@ def generate_quiz_endpoint(req: GenerateQuizRequest) -> GenerateQuizResponse:
             questions=questions,
             total_questions=len(questions),
         )
-    except ValueError as exc:
+    except TranscriptBadRequestError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except TranscriptNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TranscriptUpstreamUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except QuizGenerationError as exc:
         log.exception("Quiz generation upstream/provider failure")
         raise HTTPException(status_code=502, detail="Quiz generation failed. Please retry.") from exc

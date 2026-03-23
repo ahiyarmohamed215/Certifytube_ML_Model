@@ -147,6 +147,12 @@ Open the interactive API docs at **http://127.0.0.1:8000/docs**
 | `DB_USER` | MySQL username | `root` |
 | `DB_PASSWORD` | MySQL password | *(required)* |
 | `DB_NAME` | MySQL database name | `certifytube` |
+| `TRANSCRIPT_PROXY_MODE` | Transcript proxy mode: `none`, `generic`, or `webshare` | `none` |
+| `TRANSCRIPT_PROXY_HTTP_URL` | Generic HTTP proxy URL for transcript fetches | *(empty)* |
+| `TRANSCRIPT_PROXY_HTTPS_URL` | Generic HTTPS proxy URL for transcript fetches | *(empty)* |
+| `TRANSCRIPT_WEBSHARE_PROXY_USERNAME` | Webshare residential proxy username | *(empty)* |
+| `TRANSCRIPT_WEBSHARE_PROXY_PASSWORD` | Webshare residential proxy password | *(empty)* |
+| `TRANSCRIPT_WEBSHARE_PROXY_LOCATIONS` | Optional comma-separated proxy country filters | *(empty)* |
 
 ---
 
