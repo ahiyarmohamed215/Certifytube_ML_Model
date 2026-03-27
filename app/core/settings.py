@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     db_port: int = Field(default=3306, alias="DB_PORT")
     db_user: str = Field(default="root", alias="DB_USER")
     db_password: str = Field(default="", alias="DB_PASSWORD")
-    db_name: str = Field(default="certifytube", alias="DB_NAME")
+    db_name: str = Field(default="certifytube_ml_service", alias="DB_NAME")
 
 
 settings = Settings()

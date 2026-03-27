@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-03-23T19:46:08.039350+00:00",
+  "trained_at": "2026-03-26T21:44:32.216675+00:00",
   "model": "ExplainableBoostingClassifier",
   "n_features": 49,
   "feature_columns": [
@@ -107,7 +107,7 @@
     "production_model": "ebm_model.joblib",
     "evaluation_model": "ebm_model_eval.joblib"
   },
-  "reports_dir": "reports\\ebm",
+  "reports_dir": "e:\\IIT\\YEAR 05\\SEMISTER 01\\FYP\\certifytube_ml_model\\reports\\ebm",
   "top_cv_trials": [
     {
       "trial": 25,
@@ -248,27 +248,6 @@
     "test_rows": 201,
     "train_users": 458,
     "test_users": 113,
-    "class_balance_total": {
-      "counts": {
-        "0": 512,
-        "1": 487
-      },
-      "positive_rate": 0.4875
-    },
-    "class_balance_train": {
-      "counts": {
-        "0": 409,
-        "1": 389
-      },
-      "positive_rate": 0.4875
-    },
-    "class_balance_test": {
-      "counts": {
-        "0": 103,
-        "1": 98
-      },
-      "positive_rate": 0.4876
-    },
     "best_params": {
       "max_bins": 512,
       "learning_rate": 0.08,
@@ -363,5 +342,6 @@
     "largest_backward_seek_sec & fast_ratio",
     "seek_forward_ratio & buffering_time_sec",
     "seek_backward_ratio & buffering_time_sec"
-  ]
+  ],
+  "dataset_source": "e:\\IIT\\YEAR 05\\SEMISTER 01\\FYP\\certifytube_ml_model\\data\\sessions_features_labeled.csv"
 }

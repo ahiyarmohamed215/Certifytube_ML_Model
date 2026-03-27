@@ -20,6 +20,7 @@ The service provides:
 - EBM inference with native term-level explanations
 - strict feature-contract validation for engagement payloads
 - transcript retrieval, processing, and MySQL-backed caching
+- MySQL-backed persistence for engagement events, computed features, quiz state, and grading
 - LLM-based quiz generation through an OpenRouter-compatible API
 
 ## API Summary
@@ -30,6 +31,7 @@ The service provides:
 | `POST` | `/engagement/analyze/xgboost` | Engagement scoring with XGBoost |
 | `POST` | `/engagement/analyze/ebm` | Engagement scoring with EBM |
 | `POST` | `/quiz/generate` | Transcript-backed quiz generation |
+| `POST` | `/quiz/grade` | Grade answers against the stored quiz answer key |
 | `GET` | `/docs` | Swagger UI |
 
 ## Service Architecture
@@ -59,7 +61,9 @@ The flow is:
 3. fetch transcript when cache is missing
 4. clean and process transcript content
 5. generate quiz questions through the configured LLM provider
-6. return questions, answers, and explanations
+6. persist quiz questions, options, answers, and explanations in MySQL
+7. return the public quiz questions to the backend
+8. grade submitted answers later against the stored answer key
 
 ## Integration Contract
 

@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-03-23T19:54:57.566776+00:00",
+  "trained_at": "2026-03-26T21:33:07.305092+00:00",
   "model": "xgboost.Booster",
   "xgboost_version": "3.2.0",
   "n_features": 49,
@@ -118,7 +118,7 @@
     "production_model": "model.joblib",
     "evaluation_model": "model_eval.joblib"
   },
-  "reports_dir": "reports\\xgboost",
+  "reports_dir": "e:\\IIT\\YEAR 05\\SEMISTER 01\\FYP\\certifytube_ml_model\\reports\\xgboost",
   "top_cv_trials": [
     {
       "trial": 36,
@@ -359,27 +359,6 @@
     "test_rows": 201,
     "train_users": 458,
     "test_users": 113,
-    "class_balance_total": {
-      "counts": {
-        "0": 512,
-        "1": 487
-      },
-      "positive_rate": 0.4875
-    },
-    "class_balance_train": {
-      "counts": {
-        "0": 409,
-        "1": 389
-      },
-      "positive_rate": 0.4875
-    },
-    "class_balance_test": {
-      "counts": {
-        "0": 103,
-        "1": 98
-      },
-      "positive_rate": 0.4876
-    },
     "best_params": {
       "objective": "binary:logistic",
       "eval_metric": [
@@ -423,5 +402,6 @@
       "cv_best_auc": 0.989655670424284,
       "cv_best_round": 53
     }
-  }
+  },
+  "dataset_source": "e:\\IIT\\YEAR 05\\SEMISTER 01\\FYP\\certifytube_ml_model\\data\\sessions_features_labeled.csv"
 }
