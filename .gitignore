@@ -6,6 +6,7 @@ __pycache__/
 # Virtual env
 venv/
 .venv/
+.venv_py313/
 .venv_py313_backup_*/
 
 # Local env files
