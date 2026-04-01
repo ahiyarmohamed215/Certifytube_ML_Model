@@ -16,7 +16,7 @@ CertifyTube is designed for a larger application stack where a separate backend 
 The service provides:
 
 - FastAPI endpoints for engagement scoring and quiz generation
-- XGBoost regression inference with SHAP-based local explanations
+- XGBoost regression inference with SHAP-based learner explanations
 - EBM regression inference with native term-level explanations
 - strict feature-contract validation for engagement payloads
 - transcript retrieval, processing, and MySQL-backed caching
@@ -49,11 +49,11 @@ Typical output includes:
 
 - `engagement_score` in `[0, 1]`
 - `engagement_status` as `engaged` or `not_engaged`
-- natural-language explanation
+- final learner-facing explanation
 - top positive contributors
 - top negative contributors
 
-The service can now return a binary `engagement_status` together with the score. The backend may provide either an explicit `engagement_status` override or an `engagement_threshold`. The explanation returned by the service stays neutral and reason-focused so the frontend or backend can wrap it with its own learner-facing copy.
+The service returns a binary `engagement_status` together with the score. The backend may provide either an explicit `engagement_status` override or an `engagement_threshold`. In the current flow, the backend sends the threshold and the ML service returns the final learner-facing explanation directly so the frontend can display one explanation source only.
 
 ### Quiz Verification
 
@@ -80,6 +80,7 @@ All engagement endpoints use the same request envelope. The preferred format is 
 {
   "session_id": "session-001",
   "feature_version": "v1.0",
+  "engagement_threshold": 0.85,
   "events": [
     {
       "event_id": "evt-001",
@@ -99,6 +100,8 @@ Important contract rules:
 
 - `session_id` is required
 - `feature_version` is required
+- `engagement_threshold` is optional and should be sent when the backend owns the pass/fail rule
+- `engagement_status` is optional and overrides threshold-based status when supplied
 - provide exactly one of `events` or `features`
 - `events` is the preferred format because the service computes the canonical feature row itself
 - `features` is still accepted for backward compatibility, but every feature must be numeric and match the versioned contract exactly
@@ -115,13 +118,18 @@ Both engagement models return:
 - `feature_version`
 - `engagement_score`
 - `engagement_status`
-- explanation text
+- final explanation text for the learner
 - top positive contributors
 - top negative contributors
 
 XGBoost uses SHAP contributor objects. EBM uses native contribution objects.
 
-`engagement_score` is still the direct regression output exposed by the API. `engagement_status` is the binary label paired with that score for frontend use, based on the backend-provided status or threshold when available.
+`engagement_score` is still the direct regression output exposed by the API. `engagement_status` is the binary label paired with that score for frontend use, based on the backend-provided status or threshold when available. The `explanation` field is the final text to display to the learner. It is short, threshold-aware, and based on broad session patterns rather than exact scoring rules.
+
+Example explanation style:
+
+- engaged: `Good job. Your engagement score for this session is 91%. This looked engaged because you stayed with the lesson through to the end and playback pace stayed close to normal.`
+- not engaged: `Your engagement score for this session is 41%. This looked less engaged because forward skipping broke the lesson flow and the viewing pattern looked fragmented with repeated jumps.`
 
 ### Quiz Request Shape
 
@@ -262,6 +270,7 @@ Core environment variables:
 
 | Variable | Purpose |
 | --- | --- |
+| `ENGAGEMENT_THRESHOLD` | Default threshold used when the request does not provide `engagement_threshold` |
 | `OPENROUTER_API_KEY` | API key for quiz generation |
 | `QUIZ_MODEL` | LLM model identifier |
 | `OPENROUTER_BASE_URL` | OpenRouter-compatible base URL |
