@@ -13,6 +13,7 @@ from app.api.engagement_schemas import (
 )
 from app.core.database import EngagementPersistenceError, save_engagement_analysis
 from app.core.logging import get_logger
+from app.core.settings import settings
 from verification.engagement.common.behavior_map import get_behavior
 from verification.engagement.common.event_pipeline import (
     EventPipelineError,
@@ -21,6 +22,7 @@ from verification.engagement.common.event_pipeline import (
 from verification.engagement.common.text_explainer import (
     build_feature_reason,
     build_user_explanation,
+    resolve_engagement_status,
 )
 from verification.engagement.common.validate import FeatureValidationError
 from verification.engagement.contracts.contract import (
@@ -76,11 +78,21 @@ def _resolve_request_features(
 # ---------------------------------------------------------------------------
 @router.post("/analyze/xgboost", response_model=XGBoostAnalyzeResponse)
 def analyze_xgboost(req: AnalyzeRequest):
-    """Engagement analysis using XGBoost + SHAP explanations."""
+    """Continuous engagement score regression using XGBoost + SHAP explanations."""
     try:
         features, event_records, input_source = _resolve_request_features(req)
 
         pred = predict_engagement(features)
+        threshold = (
+            req.engagement_threshold
+            if req.engagement_threshold is not None
+            else settings.engagement_threshold
+        )
+        engagement_status = resolve_engagement_status(
+            engagement_score=pred["engagement_score"],
+            engagement_status=req.engagement_status,
+            engagement_threshold=threshold,
+        )
 
         shap_rows = compute_local_shap(features)
         top_negative, top_positive = top_contributors(shap_rows, k=3)
@@ -89,6 +101,9 @@ def analyze_xgboost(req: AnalyzeRequest):
             shap_top_negative=top_negative,
             shap_top_positive=top_positive,
             engagement_score=pred["engagement_score"],
+            engagement_status=engagement_status,
+            engagement_threshold=threshold,
+            session_features=features,
         )
 
         def to_shap_contributor(row: Dict[str, Any]) -> ShapContributor:
@@ -99,7 +114,7 @@ def analyze_xgboost(req: AnalyzeRequest):
                 behavior_category=get_behavior(row["feature"]),
                 reason=build_feature_reason(
                     row["feature"],
-                    row["value"],
+                    features.get(row["feature"], row["value"]),
                     row["shap"],
                 ),
             )
@@ -124,6 +139,7 @@ def analyze_xgboost(req: AnalyzeRequest):
             session_id=req.session_id,
             feature_version=req.feature_version,
             engagement_score=pred["engagement_score"],
+            engagement_status=engagement_status,
             explanation=user_text,
             shap_top_negative=shap_negative,
             shap_top_positive=shap_positive,
@@ -148,11 +164,21 @@ def analyze_xgboost(req: AnalyzeRequest):
 # ---------------------------------------------------------------------------
 @router.post("/analyze/ebm", response_model=EBMAnalyzeResponse)
 def analyze_ebm(req: AnalyzeRequest):
-    """Engagement analysis using EBM + native glass-box explanations."""
+    """Continuous engagement score regression using EBM + native glass-box explanations."""
     try:
         features, event_records, input_source = _resolve_request_features(req)
 
         pred = predict_engagement_ebm(features)
+        threshold = (
+            req.engagement_threshold
+            if req.engagement_threshold is not None
+            else settings.engagement_threshold
+        )
+        engagement_status = resolve_engagement_status(
+            engagement_score=pred["engagement_score"],
+            engagement_status=req.engagement_status,
+            engagement_threshold=threshold,
+        )
 
         ebm_rows = compute_local_ebm(features)
         top_negative, top_positive = top_contributors_ebm(ebm_rows, k=3)
@@ -161,6 +187,9 @@ def analyze_ebm(req: AnalyzeRequest):
             shap_top_negative=top_negative,
             shap_top_positive=top_positive,
             engagement_score=pred["engagement_score"],
+            engagement_status=engagement_status,
+            engagement_threshold=threshold,
+            session_features=features,
         )
 
         def to_ebm_contributor(row: Dict[str, Any]) -> EBMContributor:
@@ -171,7 +200,7 @@ def analyze_ebm(req: AnalyzeRequest):
                 behavior_category=get_behavior(row["feature"]),
                 reason=build_feature_reason(
                     row["feature"],
-                    row["value"],
+                    features.get(row["feature"], row["value"]),
                     row["shap"],
                 ),
             )
@@ -196,6 +225,7 @@ def analyze_ebm(req: AnalyzeRequest):
             session_id=req.session_id,
             feature_version=req.feature_version,
             engagement_score=pred["engagement_score"],
+            engagement_status=engagement_status,
             explanation=user_text,
             ebm_top_negative=ebm_negative,
             ebm_top_positive=ebm_positive,

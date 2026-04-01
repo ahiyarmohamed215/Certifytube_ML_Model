@@ -48,7 +48,12 @@ def top_contributors(
 ) -> Tuple[List[Dict[str, float]], List[Dict[str, float]]]:
     if not shap_rows:
         return [], []
-    sorted_rows = sorted(shap_rows, key=lambda r: r.get("shap", 0.0))
-    top_negative = sorted_rows[:k]
-    top_positive = list(reversed(sorted_rows[-k:]))
+    negative_rows = [row for row in shap_rows if row.get("shap", 0.0) < 0.0]
+    positive_rows = [row for row in shap_rows if row.get("shap", 0.0) > 0.0]
+    top_negative = sorted(negative_rows, key=lambda row: row.get("shap", 0.0))[:k]
+    top_positive = sorted(
+        positive_rows,
+        key=lambda row: row.get("shap", 0.0),
+        reverse=True,
+    )[:k]
     return top_negative, top_positive

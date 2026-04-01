@@ -10,6 +10,7 @@ from verification.engagement.common.validate import validate_features
 
 
 def predict_engagement(features: dict):
+    """Return the continuous engagement score from the trained XGBoost regressor."""
     booster = load_model()  # xgboost.Booster
     feature_columns = load_feature_columns()
     preprocessing = load_preprocessing()

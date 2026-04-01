@@ -5,7 +5,8 @@ from __future__ import annotations
 The notebook uses this module when it builds the training dataset, and the API
 uses the same module when backend requests send raw session events instead of
 precomputed features. Keeping this logic in one file prevents training and live
-prediction from drifting apart.
+prediction from drifting apart. The same pass also derives the continuous
+`engagement_score` target used by the regression models.
 """
 
 from typing import Any, Dict, List, Mapping, Sequence
@@ -97,14 +98,29 @@ FEATURE_COLUMNS = [
     "attention_index",
     "skim_flag",
     "deep_flag",
+    "effective_consumption_ratio",
+    "micro_rewatch_density",
+    "rage_seek_count",
+    "micro_rewatch_count",
 ]
 
 EPS = 1e-9
 LONG_PAUSE_THRESHOLD = 30.0
+RAGE_SEEK_WINDOW = 5.0
+MICRO_REWATCH_MAX_DELTA = 15.0
 
 
 class EventPipelineError(Exception):
     pass
+
+
+def _parse_datetime_column(values: pd.Series) -> pd.Series:
+    """Parse ISO timestamps while preserving mixed naive and UTC-Z inputs."""
+    try:
+        return pd.to_datetime(values, errors="coerce", utc=True, format="mixed")
+    except TypeError:
+        # Fallback for older pandas versions that do not support format="mixed".
+        return pd.to_datetime(values, errors="coerce", utc=True)
 
 
 def events_to_frame(events: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
@@ -145,8 +161,8 @@ def clean_raw_events(df_raw: pd.DataFrame) -> pd.DataFrame:
     df["video_title"] = df["video_title"].fillna("").astype(str)
     df["event_type"] = df["event_type"].fillna("").astype(str).str.strip().str.lower()
 
-    df["created_at_utc"] = pd.to_datetime(df["created_at_utc"], errors="coerce", utc=True)
-    df["client_created_at_local"] = pd.to_datetime(df["client_created_at_local"], errors="coerce", utc=True)
+    df["created_at_utc"] = _parse_datetime_column(df["created_at_utc"])
+    df["client_created_at_local"] = _parse_datetime_column(df["client_created_at_local"])
 
     for column in NUMERIC_EVENT_COLUMNS:
         df[column] = pd.to_numeric(df[column], errors="coerce")
@@ -216,6 +232,10 @@ def build_features(df_raw: pd.DataFrame) -> pd.DataFrame:
         last_position = 0.0
         prev_state = None
         prev_time = None
+        effective_consumed_sec = 0.0
+        rage_seek_count = 0
+        micro_rewatch_count = 0
+        last_seek_time = None
 
         # Walk each session chronologically and simulate watch/pause/buffer time
         # from the previous player state until the next event timestamp.
@@ -232,6 +252,7 @@ def build_features(df_raw: pd.DataFrame) -> pd.DataFrame:
                 dt = max(0.0, (cur_time - prev_time).total_seconds())
                 if prev_state == 1:
                     watch_time += dt
+                    effective_consumed_sec += dt * rate
                     if rate < 1.0:
                         speed_seg["lt1x"] += dt
                     elif rate == 1.0:
@@ -261,11 +282,18 @@ def build_features(df_raw: pd.DataFrame) -> pd.DataFrame:
                 if delta > 0:
                     num_seek_fwd += 1
                     seek_fwd_dists.append(abs(delta))
+                    if last_seek_time is not None:
+                        since_last = (cur_time - last_seek_time).total_seconds()
+                        if since_last < RAGE_SEEK_WINDOW:
+                            rage_seek_count += 1
                 elif delta < 0:
                     num_seek_bwd += 1
                     seek_bwd_dists.append(abs(delta))
+                    if abs(delta) <= MICRO_REWATCH_MAX_DELTA:
+                        micro_rewatch_count += 1
                 if first_seek_time is None:
                     first_seek_time = max(0.0, (cur_time - grp["created_at_utc"].iloc[0]).total_seconds())
+                last_seek_time = cur_time
             elif ev_type == "ratechange":
                 num_ratechange += 1
 
@@ -279,6 +307,16 @@ def build_features(df_raw: pd.DataFrame) -> pd.DataFrame:
         session_minutes = session_duration / 60.0 + EPS
         watched_time = watch_time + EPS
         all_seek = seek_fwd_dists + seek_bwd_dists
+
+        # Advanced features
+        effective_consumption_ratio = effective_consumed_sec / (video_duration + EPS)
+        micro_rewatch_dens = micro_rewatch_count / session_minutes
+
+        # Heuristic engagement score (continuous target 0.0 - 1.0)
+        C = min(1.0, effective_consumption_ratio)
+        R = min(0.2, total_seek_backward / (video_duration + EPS))
+        S = total_seek_forward / (video_duration + EPS)
+        engagement_score = float(np.clip(C + (0.5 * R) - (0.3 * S), 0.0, 1.0))
 
         # Each dictionary below becomes one session-level training/inference row.
         all_sessions.append(
@@ -336,7 +374,11 @@ def build_features(df_raw: pd.DataFrame) -> pd.DataFrame:
                 "attention_index": (watch_time / (session_duration + EPS)) * (last_position / (video_duration + EPS)),
                 "skim_flag": 1 if total_seek_forward / (video_duration + EPS) > 0.3 else 0,
                 "deep_flag": 1 if (last_position / (video_duration + EPS) > 0.8 and total_seek_backward > 0) else 0,
-                "engagement_label": np.nan,
+                "effective_consumption_ratio": effective_consumption_ratio,
+                "micro_rewatch_density": micro_rewatch_dens,
+                "rage_seek_count": rage_seek_count,
+                "micro_rewatch_count": micro_rewatch_count,
+                "engagement_score": engagement_score,
             }
         )
 
@@ -351,7 +393,7 @@ def compute_features_from_events(
     events: Sequence[Mapping[str, Any]],
     expected_session_id: str | None = None,
 ) -> Dict[str, float]:
-    """Build the exact 49-feature model payload for a single-session request."""
+    """Build the exact 53-feature model payload for a single-session request."""
     raw_df = events_to_frame(events)
     clean_df = clean_raw_events(raw_df)
 

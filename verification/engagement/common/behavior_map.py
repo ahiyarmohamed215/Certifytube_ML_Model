@@ -65,6 +65,12 @@ FEATURE_TO_BEHAVIOR: Dict[str, str] = {
     "num_buffering_events": "playback_quality",
     "buffering_time_sec": "playback_quality",
     "buffering_freq_per_min": "playback_quality",
+
+    # Advanced behavioral features
+    "effective_consumption_ratio": "coverage",
+    "micro_rewatch_density": "rewatching",
+    "rage_seek_count": "skipping",
+    "micro_rewatch_count": "rewatching",
 }
 
 

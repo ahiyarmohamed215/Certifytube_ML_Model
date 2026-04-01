@@ -1,7 +1,8 @@
 {
-  "trained_at": "2026-03-27T23:33:46.798625+00:00",
-  "model": "ExplainableBoostingClassifier",
-  "n_features": 49,
+  "trained_at": "2026-04-01T09:33:26.683145+00:00",
+  "model": "ExplainableBoostingRegressor",
+  "model_type": "regression",
+  "n_features": 53,
   "feature_columns": [
     "session_duration_sec",
     "video_duration_sec",
@@ -51,52 +52,20 @@
     "play_pause_ratio",
     "attention_index",
     "skim_flag",
-    "deep_flag"
+    "deep_flag",
+    "effective_consumption_ratio",
+    "micro_rewatch_density",
+    "rage_seek_count",
+    "micro_rewatch_count"
   ],
-  "label_col": "engagement_label",
+  "score_column": "engagement_score",
   "group_col": "user_id",
   "test_size": 0.2,
   "random_state": 42,
-  "engagement_threshold": 0.85,
-  "drop_cols": [
-    "engagement_label",
-    "user_id",
-    "session_id",
-    "video_id",
-    "video_title"
-  ],
-  "best_params": {
-    "max_bins": 512,
-    "learning_rate": 0.08,
-    "max_leaves": 2,
-    "min_samples_leaf": 4,
-    "interactions": 10,
-    "max_interaction_bins": 16
-  },
-  "cv_best_auc": 0.988294,
   "metrics_test": {
-    "auc_roc": 0.9894987121062018,
-    "auc_pr": 0.9887222213596499,
-    "accuracy_0.5": 0.945273631840796,
-    "precision_0.5": 0.9393939393939394,
-    "recall_0.5": 0.9489795918367347,
-    "f1_0.5": 0.9441624365482234,
-    "accuracy_0.85": 0.9203980099502488,
-    "precision_0.85": 0.9555555555555556,
-    "recall_0.85": 0.8775510204081632,
-    "f1_0.85": 0.9148936170212766,
-    "confusion_matrix_0.85": [
-      [
-        99,
-        4
-      ],
-      [
-        12,
-        86
-      ]
-    ],
-    "threshold_used": 0.85,
-    "cv_best_auc": 0.9882938253445314
+    "mae": 0.04236013404506022,
+    "rmse": 0.08864039282569919,
+    "r2": 0.9068299325004686
   },
   "preprocessing": {
     "strategy": "median_imputation",
@@ -107,241 +76,14 @@
     "production_model": "ebm_model.joblib",
     "evaluation_model": "ebm_model_eval.joblib"
   },
-  "reports_dir": "e:\\IIT\\YEAR 05\\SEMISTER 01\\FYP\\certifytube_ml_model\\reports\\ebm",
-  "top_cv_trials": [
-    {
-      "trial": 25,
-      "mean_auc": 0.988294,
-      "std_auc": 0.003321,
-      "params": {
-        "max_bins": 512,
-        "learning_rate": 0.08,
-        "max_leaves": 2,
-        "min_samples_leaf": 4,
-        "interactions": 10,
-        "max_interaction_bins": 16
-      }
-    },
-    {
-      "trial": 6,
-      "mean_auc": 0.98726,
-      "std_auc": 0.002519,
-      "params": {
-        "max_bins": 256,
-        "learning_rate": 0.01,
-        "max_leaves": 2,
-        "min_samples_leaf": 8,
-        "interactions": 10,
-        "max_interaction_bins": 16
-      }
-    },
-    {
-      "trial": 15,
-      "mean_auc": 0.987147,
-      "std_auc": 0.003019,
-      "params": {
-        "max_bins": 256,
-        "learning_rate": 0.05,
-        "max_leaves": 2,
-        "min_samples_leaf": 4,
-        "interactions": 8,
-        "max_interaction_bins": 64
-      }
-    },
-    {
-      "trial": 12,
-      "mean_auc": 0.987109,
-      "std_auc": 0.002033,
-      "params": {
-        "max_bins": 512,
-        "learning_rate": 0.02,
-        "max_leaves": 2,
-        "min_samples_leaf": 5,
-        "interactions": 8,
-        "max_interaction_bins": 16
-      }
-    },
-    {
-      "trial": 8,
-      "mean_auc": 0.986707,
-      "std_auc": 0.003552,
-      "params": {
-        "max_bins": 512,
-        "learning_rate": 0.02,
-        "max_leaves": 2,
-        "min_samples_leaf": 15,
-        "interactions": 5,
-        "max_interaction_bins": 64
-      }
-    },
-    {
-      "trial": 20,
-      "mean_auc": 0.986431,
-      "std_auc": 0.002896,
-      "params": {
-        "max_bins": 256,
-        "learning_rate": 0.03,
-        "max_leaves": 2,
-        "min_samples_leaf": 2,
-        "interactions": 3,
-        "max_interaction_bins": 16
-      }
-    },
-    {
-      "trial": 29,
-      "mean_auc": 0.986256,
-      "std_auc": 0.003896,
-      "params": {
-        "max_bins": 256,
-        "learning_rate": 0.005,
-        "max_leaves": 2,
-        "min_samples_leaf": 2,
-        "interactions": 8,
-        "max_interaction_bins": 64
-      }
-    },
-    {
-      "trial": 3,
-      "mean_auc": 0.984433,
-      "std_auc": 0.004917,
-      "params": {
-        "max_bins": 512,
-        "learning_rate": 0.05,
-        "max_leaves": 5,
-        "min_samples_leaf": 10,
-        "interactions": 5,
-        "max_interaction_bins": 16
-      }
-    },
-    {
-      "trial": 16,
-      "mean_auc": 0.984377,
-      "std_auc": 0.006185,
-      "params": {
-        "max_bins": 256,
-        "learning_rate": 0.05,
-        "max_leaves": 6,
-        "min_samples_leaf": 5,
-        "interactions": 10,
-        "max_interaction_bins": 16
-      }
-    },
-    {
-      "trial": 11,
-      "mean_auc": 0.984013,
-      "std_auc": 0.004557,
-      "params": {
-        "max_bins": 512,
-        "learning_rate": 0.05,
-        "max_leaves": 3,
-        "min_samples_leaf": 15,
-        "interactions": 5,
-        "max_interaction_bins": 16
-      }
-    }
-  ],
   "dataset_summary": {
-    "dataset_rows_total": 999,
-    "dataset_users_total": 571,
-    "feature_count": 49,
-    "train_rows": 798,
-    "test_rows": 201,
-    "train_users": 458,
-    "test_users": 113,
-    "best_params": {
-      "max_bins": 512,
-      "learning_rate": 0.08,
-      "max_leaves": 2,
-      "min_samples_leaf": 4,
-      "interactions": 10,
-      "max_interaction_bins": 16
-    },
-    "metrics_test": {
-      "auc_roc": 0.9894987121062018,
-      "auc_pr": 0.9887222213596499,
-      "accuracy_0.5": 0.945273631840796,
-      "precision_0.5": 0.9393939393939394,
-      "recall_0.5": 0.9489795918367347,
-      "f1_0.5": 0.9441624365482234,
-      "accuracy_0.85": 0.9203980099502488,
-      "precision_0.85": 0.9555555555555556,
-      "recall_0.85": 0.8775510204081632,
-      "f1_0.85": 0.9148936170212766,
-      "confusion_matrix_0.85": [
-        [
-          99,
-          4
-        ],
-        [
-          12,
-          86
-        ]
-      ],
-      "threshold_used": 0.85,
-      "cv_best_auc": 0.9882938253445314
-    }
+    "dataset_rows_total": 157,
+    "dataset_users_total": 25,
+    "feature_count": 53,
+    "train_rows": 123,
+    "test_rows": 34,
+    "train_users": 20,
+    "test_users": 5
   },
-  "n_terms": 59,
-  "term_names": [
-    "session_duration_sec",
-    "video_duration_sec",
-    "last_position_sec",
-    "completed_flag",
-    "watch_time_sec",
-    "watch_time_ratio",
-    "completion_ratio",
-    "engagement_velocity",
-    "num_pause",
-    "total_pause_duration_sec",
-    "avg_pause_duration_sec",
-    "median_pause_duration_sec",
-    "pause_freq_per_min",
-    "long_pause_count",
-    "long_pause_ratio",
-    "num_seek",
-    "num_seek_forward",
-    "num_seek_backward",
-    "total_seek_forward_sec",
-    "total_seek_backward_sec",
-    "avg_seek_forward_sec",
-    "avg_seek_backward_sec",
-    "largest_forward_seek_sec",
-    "largest_backward_seek_sec",
-    "seek_jump_std_sec",
-    "seek_forward_ratio",
-    "seek_backward_ratio",
-    "skip_time_ratio",
-    "rewatch_time_ratio",
-    "rewatch_to_skip_ratio",
-    "seek_density_per_min",
-    "first_seek_time_sec",
-    "early_skip_flag",
-    "num_ratechange",
-    "time_at_speed_lt1x_sec",
-    "time_at_speed_1x_sec",
-    "time_at_speed_gt1x_sec",
-    "fast_ratio",
-    "slow_ratio",
-    "playback_speed_variance",
-    "avg_playback_rate_when_playing",
-    "unique_speed_levels",
-    "num_buffering_events",
-    "buffering_time_sec",
-    "buffering_freq_per_min",
-    "play_pause_ratio",
-    "attention_index",
-    "skim_flag",
-    "deep_flag",
-    "session_duration_sec & time_at_speed_gt1x_sec",
-    "session_duration_sec & deep_flag",
-    "last_position_sec & time_at_speed_gt1x_sec",
-    "watch_time_ratio & fast_ratio",
-    "completion_ratio & fast_ratio",
-    "total_pause_duration_sec & median_pause_duration_sec",
-    "avg_seek_backward_sec & fast_ratio",
-    "largest_backward_seek_sec & fast_ratio",
-    "seek_forward_ratio & buffering_time_sec",
-    "seek_backward_ratio & buffering_time_sec"
-  ],
-  "dataset_source": "e:\\IIT\\YEAR 05\\SEMISTER 01\\FYP\\certifytube_ml_model\\data\\sessions_features_labeled.csv"
+  "dataset_source": "c:\\Users\\HP\\Desktop\\certifytube_ml_service\\data\\sessions_features.csv"
 }

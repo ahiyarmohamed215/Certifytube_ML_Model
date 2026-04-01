@@ -49,6 +49,10 @@
   "play_pause_ratio",
   "attention_index",
   "skim_flag",
-  "deep_flag"
+  "deep_flag",
+  "effective_consumption_ratio",
+  "micro_rewatch_density",
+  "rage_seek_count",
+  "micro_rewatch_count"
   ]
 }

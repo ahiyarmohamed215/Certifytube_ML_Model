@@ -30,15 +30,25 @@ class AnalyzeRequest(BaseModel):
 
     session_id: str = Field(..., description="Unique session identifier from backend")
     feature_version: str = Field(..., description="Feature contract version, e.g., v1.0")
+    engagement_status: Literal["engaged", "not_engaged"] | None = Field(
+        default=None,
+        description="Optional backend-owned binary status. If provided, the explanation will follow this status exactly.",
+    )
+    engagement_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional backend threshold used to convert the returned score into engaged/not_engaged when no explicit engagement_status is supplied.",
+    )
 
     features: Dict[str, float] | None = Field(
         default=None,
-        description="Optional precomputed feature vector. Kept only for backward compatibility.",
+        description="Optional precomputed feature vector for the engagement score model. Kept only for backward compatibility.",
         min_length=1,
     )
     events: List[RawEvent] | None = Field(
         default=None,
-        description="Raw player events for a single session. Preferred request format.",
+        description="Raw player events for a single session. Preferred request format because the service computes the canonical feature row itself.",
         min_length=1,
     )
 
@@ -60,7 +70,7 @@ class AnalyzeRequest(BaseModel):
 class ShapContributor(BaseModel):
     """A single SHAP contributor from the XGBoost model."""
     feature: str
-    shap_value: float = Field(..., description="SHAP value (Shapley approximation in log-odds space)")
+    shap_value: float = Field(..., description="Local SHAP contribution for this session score")
     feature_value: float = Field(..., description="Raw feature value sent to the model")
     behavior_category: str = Field(..., description="Behavioral category this feature belongs to")
     reason: str = Field(..., description="Human-readable reason why this feature influenced the score")
@@ -69,21 +79,30 @@ class ShapContributor(BaseModel):
 class XGBoostAnalyzeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    model: Literal["xgboost"] = Field(default="xgboost", description="Model identifier — always 'xgboost'")
+    model: Literal["xgboost"] = Field(default="xgboost", description="Model identifier - always 'xgboost'")
     session_id: str
     feature_version: str
 
-    engagement_score: float = Field(..., ge=0.0, le=1.0)
+    engagement_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Continuous engagement score in [0, 1] returned directly by the API",
+    )
+    engagement_status: Literal["engaged", "not_engaged"] = Field(
+        ...,
+        description="Binary engagement status aligned with the backend rule or threshold used for this response.",
+    )
 
     explanation: str = Field(..., description="Human-readable explanation of the factors driving the score")
 
     shap_top_negative: List[ShapContributor] = Field(
         default_factory=list,
-        description="Top features pushing AGAINST engagement (most negative SHAP values)",
+        description="Top features pulling the session score downward",
     )
     shap_top_positive: List[ShapContributor] = Field(
         default_factory=list,
-        description="Top features pushing TOWARDS engagement (most positive SHAP values)",
+        description="Top features lifting the session score upward",
     )
 
 
@@ -92,9 +111,9 @@ class XGBoostAnalyzeResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class EBMContributor(BaseModel):
-    """A single contributor from the EBM model (exact term score, not SHAP)."""
+    """A single exact contributor from the EBM model."""
     feature: str
-    contribution: float = Field(..., description="Exact EBM term score in log-odds space")
+    contribution: float = Field(..., description="Exact local contribution to the final session score")
     feature_value: float = Field(..., description="Raw feature value sent to the model")
     behavior_category: str = Field(..., description="Behavioral category this feature belongs to")
     reason: str = Field(..., description="Human-readable reason why this feature influenced the score")
@@ -103,19 +122,28 @@ class EBMContributor(BaseModel):
 class EBMAnalyzeResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    model: Literal["ebm"] = Field(default="ebm", description="Model identifier — always 'ebm'")
+    model: Literal["ebm"] = Field(default="ebm", description="Model identifier - always 'ebm'")
     session_id: str
     feature_version: str
 
-    engagement_score: float = Field(..., ge=0.0, le=1.0)
+    engagement_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Continuous engagement score in [0, 1] returned directly by the API",
+    )
+    engagement_status: Literal["engaged", "not_engaged"] = Field(
+        ...,
+        description="Binary engagement status aligned with the backend rule or threshold used for this response.",
+    )
 
     explanation: str = Field(..., description="Human-readable explanation of the factors driving the score")
 
     ebm_top_negative: List[EBMContributor] = Field(
         default_factory=list,
-        description="Top features pushing AGAINST engagement (most negative EBM contributions)",
+        description="Top features pulling the session score downward",
     )
     ebm_top_positive: List[EBMContributor] = Field(
         default_factory=list,
-        description="Top features pushing TOWARDS engagement (most positive EBM contributions)",
+        description="Top features lifting the session score upward",
     )

@@ -9,11 +9,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    engagement_threshold: float = 0.85
     feature_version: str = "v1.0"
     engagement_artifacts_xgboost_dir: str = "verification/engagement/xgboost/artifacts"
     engagement_artifacts_ebm_dir: str = "verification/engagement/ebm/artifacts"
     contracts_dir: str = "verification/engagement/contracts"
+    engagement_threshold: float = Field(default=0.5, alias="ENGAGEMENT_THRESHOLD")
 
     quiz_model: str = Field(default="deepseek/deepseek-r1", alias="QUIZ_MODEL")
     openrouter_base_url: str = Field(

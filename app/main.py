@@ -11,7 +11,8 @@ app = FastAPI(
     version="3.1.0",
     description=(
         "Dual-verification ML service: "
-        "Layer 1 - engagement scoring (XGBoost + SHAP, EBM + native explainability); "
+        "Layer 1 - continuous engagement score regression "
+        "(XGBoost + SHAP, EBM + native explainability); "
         "Layer 2 - transcript-grounded quiz generation with answers and explanations."
     ),
 )

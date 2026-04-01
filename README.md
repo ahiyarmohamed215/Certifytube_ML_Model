@@ -4,7 +4,7 @@ Production-style backend service for the machine learning layer of the CertifyTu
 
 This repository powers two verification stages used before certificate issuance:
 
-1. engagement verification from learner interaction behavior
+1. engagement verification as a continuous session score from learner interaction behavior
 2. transcript-grounded quiz generation for content validation
 
 > Academic project notice: this repository is source-available for review only. It is not open-source software. Copying, reuse, redistribution, or submission as another person's work is not permitted without prior written permission from the author. See [LICENSE](LICENSE).
@@ -16,8 +16,8 @@ CertifyTube is designed for a larger application stack where a separate backend 
 The service provides:
 
 - FastAPI endpoints for engagement scoring and quiz generation
-- XGBoost inference with SHAP-based local explanations
-- EBM inference with native term-level explanations
+- XGBoost regression inference with SHAP-based local explanations
+- EBM regression inference with native term-level explanations
 - strict feature-contract validation for engagement payloads
 - transcript retrieval, processing, and MySQL-backed caching
 - MySQL-backed persistence for engagement events, computed features, quiz state, and grading
@@ -28,8 +28,8 @@ The service provides:
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/health` | Service health check |
-| `POST` | `/engagement/analyze/xgboost` | Engagement scoring with XGBoost |
-| `POST` | `/engagement/analyze/ebm` | Engagement scoring with EBM |
+| `POST` | `/engagement/analyze/xgboost` | Continuous engagement score with XGBoost |
+| `POST` | `/engagement/analyze/ebm` | Continuous engagement score with EBM |
 | `POST` | `/quiz/generate` | Transcript-backed quiz generation |
 | `POST` | `/quiz/grade` | Grade answers against the stored quiz answer key |
 | `GET` | `/docs` | Swagger UI |
@@ -38,17 +38,22 @@ The service provides:
 
 ### Engagement Verification
 
-The engagement layer evaluates whether a learner meaningfully interacted with a video using a strict engineered feature contract. The payload is validated before inference, then scored by either:
+The engagement layer estimates a continuous engagement score from learner interaction behavior using a strict engineered feature contract. The models are trained as regressors against a bounded target in `[0, 1]`.
 
-- XGBoost with SHAP explanations
-- EBM with native explainability
+The payload is validated before inference, then scored by either:
+
+- XGBoost regressor with SHAP explanations
+- EBM regressor with native explainability
 
 Typical output includes:
 
-- `engagement_score`
+- `engagement_score` in `[0, 1]`
+- `engagement_status` as `engaged` or `not_engaged`
 - natural-language explanation
 - top positive contributors
 - top negative contributors
+
+The service can now return a binary `engagement_status` together with the score. The backend may provide either an explicit `engagement_status` override or an `engagement_threshold`. The explanation returned by the service stays neutral and reason-focused so the frontend or backend can wrap it with its own learner-facing copy.
 
 ### Quiz Verification
 
@@ -69,17 +74,24 @@ The flow is:
 
 ### Engagement Request Shape
 
-All engagement endpoints use the same request format:
+All engagement endpoints use the same request envelope. The preferred format is raw player events for one session:
 
 ```json
 {
   "session_id": "session-001",
   "feature_version": "v1.0",
-  "features": {
-    "session_duration_sec": 322.95,
-    "video_duration_sec": 600.0,
-    "watch_time_sec": 502.01
-  }
+  "events": [
+    {
+      "event_id": "evt-001",
+      "session_id": "session-001",
+      "event_type": "play",
+      "player_state": 1,
+      "playback_rate": 1.0,
+      "current_time_sec": 12.4,
+      "video_duration_sec": 600.0,
+      "created_at_utc": "2026-04-01T10:00:00Z"
+    }
+  ]
 }
 ```
 
@@ -87,9 +99,10 @@ Important contract rules:
 
 - `session_id` is required
 - `feature_version` is required
-- `features` must be numeric
-- the feature payload must match the versioned contract exactly
-- missing or extra keys are rejected with `400`
+- provide exactly one of `events` or `features`
+- `events` is the preferred format because the service computes the canonical feature row itself
+- `features` is still accepted for backward compatibility, but every feature must be numeric and match the versioned contract exactly
+- missing or extra feature keys are rejected with `400`
 
 The exact feature contract is versioned under `verification/engagement/contracts/`.
 
@@ -101,11 +114,14 @@ Both engagement models return:
 - `session_id`
 - `feature_version`
 - `engagement_score`
+- `engagement_status`
 - explanation text
 - top positive contributors
 - top negative contributors
 
 XGBoost uses SHAP contributor objects. EBM uses native contribution objects.
+
+`engagement_score` is still the direct regression output exposed by the API. `engagement_status` is the binary label paired with that score for frontend use, based on the backend-provided status or threshold when available.
 
 ### Quiz Request Shape
 
@@ -154,7 +170,7 @@ The service is explicit about request and upstream failures.
 ## Repository Layout
 
 ```text
-certifytube_ml_model/
+certifytube_ml_service/
 |-- app/
 |   |-- main.py
 |   |-- api/
@@ -176,7 +192,6 @@ certifytube_ml_model/
 |       |-- generator/
 |       |-- transcript/
 |       `-- validator/
-|-- tests/
 |-- data/
 |-- reports/
 |-- .env.example
@@ -191,7 +206,7 @@ certifytube_ml_model/
 | --- | --- |
 | API | FastAPI |
 | Serving | Uvicorn |
-| ML | XGBoost, Explainable Boosting Machine |
+| ML | XGBoost regressor, Explainable Boosting Regressor |
 | Explainability | SHAP, native EBM term explanations |
 | Data tooling | pandas, NumPy, scikit-learn |
 | Quiz generation | OpenRouter-compatible LLM API |
@@ -267,15 +282,8 @@ Core environment variables:
 - XGBoost artifacts are stored under `verification/engagement/xgboost/artifacts/`
 - EBM artifacts are stored under `verification/engagement/ebm/artifacts/`
 - shared preprocessing and validation utilities are under `verification/engagement/common/`
+- the end-to-end training notebook is `verification/engagement/engagement_model_pipeline.ipynb`
 - generated reports are stored under `reports/`
-
-## Testing
-
-Run the test suite with:
-
-```bash
-python -m pytest tests -v
-```
 
 ## Project Positioning
 
